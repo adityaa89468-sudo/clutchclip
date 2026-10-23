@@ -2,33 +2,73 @@
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportHeight="108"
-    android:viewportWidth="108">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Subtle Ambient Inner Glow Circle inside 66dp Adaptive Safe Zone -->
     <path
-        android:fillType="evenOdd"
-        android:pathData="M32,64C32,64 38.39,52.99 44.13,50.95C51.37,48.37 70.14,49.57 70.14,49.57L108.26,87.69L108,109.01L75.97,107.97L32,64Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1">
-        <aapt:attr name="android:fillColor">
+        android:pathData="M54,54m-31,0a31,31 0,1 1,62 0a31,31 0,1 1,-62 0"
+        android:fillColor="#161C2E"
+        android:strokeWidth="1.5"
+        android:strokeColor="#26F43F5E" />
+
+    <!-- Outer Dashed Telemetry Aperture Ring -->
+    <path
+        android:pathData="M54,26C69.46,26 82,38.54 82,54C82,69.46 69.46,82 54,82C38.54,82 26,69.46 26,54C26,38.54 38.54,26 54,26Z"
+        android:strokeWidth="1.2"
+        android:strokeColor="#334155"
+        android:fillColor="#00000000" />
+
+    <!-- Sweeping Retroactive Replay 'C' Arc -->
+    <path
+        android:pathData="M71.5,39.5A23,23 0 1,0 72.5,67.5"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000">
+        <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="78.5885"
-                android:endY="90.9159"
-                android:startX="48.7653"
-                android:startY="61.0927"
+                android:startX="28"
+                android:startY="28"
+                android:endX="78"
+                android:endY="78"
                 android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
+                <item android:offset="0.0" android:color="#FFFF2E54" />
+                <item android:offset="0.55" android:color="#FFFB7185" />
+                <item android:offset="1.0" android:color="#FFF59E0B" />
             </gradient>
         </aapt:attr>
     </path>
+
+    <!-- Replay Rewind Arrowhead Tip -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M66.94,46.02L66.94,46.02C72.44,50.07 76,56.61 76,64L32,64C32,56.61 35.56,50.11 40.98,46.06L36.18,41.19C35.45,40.45 35.45,39.3 36.18,38.56C36.91,37.81 38.05,37.81 38.78,38.56L44.25,44.05C47.18,42.57 50.48,41.71 54,41.71C57.48,41.71 60.78,42.57 63.68,44.05L69.11,38.56C69.84,37.81 70.98,37.81 71.71,38.56C72.44,39.3 72.44,40.45 71.71,41.19L66.94,46.02ZM62.94,56.92C64.08,56.92 65,56.01 65,54.88C65,53.76 64.08,52.85 62.94,52.85C61.8,52.85 60.88,53.76 60.88,54.88C60.88,56.01 61.8,56.92 62.94,56.92ZM45.06,56.92C46.2,56.92 47.13,56.01 47.13,54.88C47.13,53.76 46.2,52.85 45.06,52.85C43.92,52.85 43,53.76 43,54.88C43,56.01 43.92,56.92 45.06,56.92Z"
-        android:strokeColor="#00000000"
-        android:strokeWidth="1" />
+        android:pathData="M75.5,30.5L77.5,44.5L64,41Z"
+        android:fillColor="#FFF59E0B" />
+
+    <!-- Center High-Voltage Clutch Lightning Bolt Core -->
+    <path
+        android:pathData="M58.5,28.5L39.5,55H53L47.5,79.5L68.5,53H55L58.5,28.5Z"
+        android:strokeWidth="1.6"
+        android:strokeColor="#FF090D16"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="42"
+                android:startY="28"
+                android:endX="66"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFFFF" />
+                <item android:offset="0.38" android:color="#FFFEF08A" />
+                <item android:offset="0.75" android:color="#FFF59E0B" />
+                <item android:offset="1.0" android:color="#FFF43F5E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Active REC Ruby Beacon Dot -->
+    <path
+        android:pathData="M73.5,31.5m-4.6,0a4.6,4.6 0,1 1,9.2 0a4.6,4.6 0,1 1,-9.2 0"
+        android:fillColor="#FFFF2E54"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFFFF" />
 </vector>

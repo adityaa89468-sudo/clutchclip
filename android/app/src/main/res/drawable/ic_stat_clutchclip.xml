@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64"
+    android:tint="#FFFFFF">
+    <!-- Sweeping Replay C-Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M48.5,22A19,19 0 1,0 49.5,39"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="5.5" />
+    <!-- Replay Arrow Tip -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,14L54,26L42,23Z" />
+    <!-- Center Clutch Lightning Bolt -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,13L20.5,34.5H31.5L27,51L43.5,29.5H32.5L36,13Z" />
+</vector>

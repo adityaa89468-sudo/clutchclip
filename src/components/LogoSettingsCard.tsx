@@ -110,11 +110,45 @@ export const LogoSettingsCard: React.FC<LogoSettingsCardProps> = ({
     link.download =
       variantToDownload === 'main'
         ? 'clutchclip-main-app-logo.svg'
-        : 'clutchclip-mini-app-logo.svg';
+        : 'clutchclip-mini-apk-logo.svg';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadLogoPng = (variantToDownload: LogoVariant, pixelDimension = 512) => {
+    const svgString = getClutchClipLogoSvgString(variantToDownload);
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = pixelDimension;
+      canvas.height = pixelDimension;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, pixelDimension, pixelDimension);
+        ctx.drawImage(img, 0, 0, pixelDimension, pixelDimension);
+        canvas.toBlob((pngBlob) => {
+          if (pngBlob) {
+            const pngUrl = URL.createObjectURL(pngBlob);
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download =
+              variantToDownload === 'mini'
+                ? `clutchclip-mini-apk-logo-${pixelDimension}x${pixelDimension}.png`
+                : `clutchclip-main-apk-logo-${pixelDimension}x${pixelDimension}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(pngUrl);
+          }
+        }, 'image/png');
+      }
+      URL.revokeObjectURL(svgUrl);
+    };
+    img.src = svgUrl;
   };
 
   return (
@@ -126,9 +160,9 @@ export const LogoSettingsCard: React.FC<LogoSettingsCardProps> = ({
             <ImageIcon className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-white">App Logo, Mini Logo & Watermark</h3>
+            <h3 className="text-xs font-bold text-white">App Logo, Mini APK Logo & Watermark</h3>
             <p className="text-[10px] text-slate-400">
-              Official ClutchClip Main & Mini Logos · Hide logo is for subscribed users only
+              Official ClutchClip Main & Mini APK Logos · Hide logo is for subscribed users only
             </p>
           </div>
         </div>
@@ -144,12 +178,12 @@ export const LogoSettingsCard: React.FC<LogoSettingsCardProps> = ({
         </span>
       </div>
 
-      {/* Main App Logo & Mini App Logo Showcase Cards */}
-      <div className="space-y-2">
+      {/* Main App Logo & Mini APK Logo Showcase Cards */}
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Official App Logo & Mini App Logo</span>
+            <span>Official App Logo & Mini APK Logo</span>
           </span>
           <span className="text-[10px] text-slate-400">Tap to set active watermark style</span>
         </div>
@@ -174,20 +208,32 @@ export const LogoSettingsCard: React.FC<LogoSettingsCardProps> = ({
             <div className="text-[10px] text-slate-400 leading-tight mt-0.5">
               Esports Crest + Shutter Lens & Bolt
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDownloadLogoSvg('main');
-              }}
-              className="mt-2 py-1 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] font-semibold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <Download className="w-2.5 h-2.5 text-rose-400" />
-              <span>Save SVG</span>
-            </button>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadLogoPng('main', 512);
+                }}
+                className="py-1 px-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-[10px] font-semibold text-rose-300 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <Download className="w-2.5 h-2.5 text-rose-400" />
+                <span>512 PNG</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadLogoSvg('main');
+                }}
+                className="py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] font-semibold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <span>SVG</span>
+              </button>
+            </div>
           </div>
 
-          {/* Card 2: Mini App Logo */}
+          {/* Card 2: Mini APK Logo */}
           <div
             onClick={() => handleSetVariant('mini')}
             className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col items-center text-center relative ${
@@ -202,25 +248,76 @@ export const LogoSettingsCard: React.FC<LogoSettingsCardProps> = ({
               </span>
             )}
             <div className="h-[56px] flex items-center justify-center gap-2">
-              <AppLogo size={46} variant="mini" />
-              <AppLogo size={26} variant="mini" />
+              <AppLogo size={48} variant="mini" />
+              <div className="flex flex-col items-center gap-1">
+                <div className="w-7 h-7 rounded-full overflow-hidden ring-1 ring-amber-400/50 shadow-md flex items-center justify-center bg-[#090d16]">
+                  <AppLogo size={28} variant="mini" />
+                </div>
+                <span className="text-[8px] font-mono-numbers text-amber-300/90 uppercase tracking-tighter">
+                  APK Icon
+                </span>
+              </div>
             </div>
-            <div className="mt-2 text-xs font-bold text-white font-display">Mini App Logo</div>
+            <div className="mt-2 text-xs font-bold text-white font-display">Mini APK Logo</div>
             <div className="text-[10px] text-slate-400 leading-tight mt-0.5">
-              Compact Replay Ring for Bubble & HUD
+              Android Home Launcher, Bubble & HUD
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDownloadLogoSvg('mini');
-              }}
-              className="mt-2 py-1 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] font-semibold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <Download className="w-2.5 h-2.5 text-amber-400" />
-              <span>Save SVG</span>
-            </button>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadLogoPng('mini', 512);
+                }}
+                className="py-1 px-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-[10px] font-semibold text-amber-300 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <Download className="w-2.5 h-2.5 text-amber-400" />
+                <span>512 PNG</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadLogoSvg('mini');
+                }}
+                className="py-1 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-[10px] font-semibold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
+              >
+                <span>SVG</span>
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Native Android Home Screen & Play Store Mini APK Icon Strip */}
+        <div className="p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800/90 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center -space-x-1.5 shrink-0">
+              {/* Squircle Adaptive APK Icon */}
+              <div className="w-9 h-9 rounded-[10px] overflow-hidden ring-2 ring-slate-950 shadow-md">
+                <AppLogo size={36} variant="mini" />
+              </div>
+              {/* Round Launcher APK Icon */}
+              <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-slate-950 shadow-md bg-[#090d16] flex items-center justify-center">
+                <AppLogo size={32} variant="mini" />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-white truncate">
+                Android Native Mini APK Icon Ready
+              </div>
+              <div className="text-[9px] text-slate-400 truncate">
+                Adaptive Squircle + Round Launcher + 192px/512px Play Store PNG
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleDownloadLogoPng('mini', 192)}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300 hover:text-white flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+          >
+            <Download className="w-3 h-3 text-amber-400" />
+            <span>192px APK</span>
+          </button>
         </div>
       </div>
 

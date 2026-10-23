@@ -66,6 +66,7 @@ import { AdMobBannerBar } from './components/AdMobBannerBar';
 import { AdMobAppOpenModal } from './components/AdMobAppOpenModal';
 import { LegalSettingsFooter } from './components/LegalSettingsFooter';
 import { FirstLaunchIntroModal, ONBOARDING_STORAGE_KEY } from './components/FirstLaunchIntroModal';
+import { SplashScreen } from './components/SplashScreen';
 
 type Tab = 'screen' | 'buffer' | 'premium' | 'vault' | 'settings';
 
@@ -103,6 +104,7 @@ export default function App() {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [premiumTargetFeature, setPremiumTargetFeature] = useState<string | undefined>(undefined);
   const [isAppOpenAdVisible, setIsAppOpenAdVisible] = useState(false);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [showFirstLaunchIntro, setShowFirstLaunchIntro] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -123,15 +125,15 @@ export default function App() {
     }
   }, [userTier]);
 
-  // Trigger AdMob App Open Ad (ca-app-pub-9364231981895017/9335774357) on launch for Free users only (after one-time intro is completed)
+  // Trigger AdMob App Open Ad (ca-app-pub-9364231981895017/9335774357) on launch for Free users only (after splash & one-time intro complete)
   useEffect(() => {
-    if (userTier === 'free' && !showFirstLaunchIntro) {
+    if (!showSplash && userTier === 'free' && !showFirstLaunchIntro) {
       const triggered = admobService.requestAppOpenAdOnLaunch(userTier);
       if (triggered) {
         setIsAppOpenAdVisible(true);
       }
     }
-  }, []);
+  }, [showSplash, showFirstLaunchIntro]);
 
   // Logo & Watermark Configuration (Remove watermark / hide logo is available to subscribed users only)
   const [logoConfig, setLogoConfig] = useState<LogoConfig>(() => {
@@ -1207,7 +1209,7 @@ export default function App() {
 
         {/* Google AdMob App Open Ad Overlay (Free Tier Only; Removed for Premium Users) */}
         <AdMobAppOpenModal
-          isOpen={isAppOpenAdVisible && !showFirstLaunchIntro}
+          isOpen={isAppOpenAdVisible && !showSplash && !showFirstLaunchIntro}
           isPremium={isPremium}
           onClose={() => setIsAppOpenAdVisible(false)}
           onUpgradePremium={() => {
@@ -1217,8 +1219,13 @@ export default function App() {
         />
 
         {/* One-Time First-Launch App Introduction & Play Console Prominent Disclosure Page */}
-        {showFirstLaunchIntro && (
+        {!showSplash && showFirstLaunchIntro && (
           <FirstLaunchIntroModal onComplete={() => setShowFirstLaunchIntro(false)} />
+        )}
+
+        {/* Animated Startup Splash Screen */}
+        {showSplash && (
+          <SplashScreen onFinish={() => setShowSplash(false)} />
         )}
       </main>
 

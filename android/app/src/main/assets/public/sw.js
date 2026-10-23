@@ -96,7 +96,7 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "revision": "9b5220f1f21589a3c942faf1dc40a9d7"
   }, {
     "url": "index.html",
-    "revision": "703848db1327b644ab06d4221979e816"
+    "revision": "8414e50010bde24bc1aad0c081ffa4d6"
   }, {
     "url": "icon.svg",
     "revision": "63c6e982955dd12570a709cd8c976fc3"
@@ -113,6 +113,9 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "url": "apple-touch-icon.png",
     "revision": "57539f9f848fcf7beea05b6f798fb700"
   }, {
+    "url": "apk-mini-logo-512.png",
+    "revision": "c9a50731f49181041eced7fd702ff59e"
+  }, {
     "url": "assets/vendor-react-DhSIqXbT.js",
     "revision": null
   }, {
@@ -125,10 +128,10 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "url": "assets/vendor-firebase-DS8hMEd_.js",
     "revision": null
   }, {
-    "url": "assets/index-DcyhdMjW.js",
+    "url": "assets/index-gzaMWsO3.js",
     "revision": null
   }, {
-    "url": "assets/index-D6p-j4cg.css",
+    "url": "assets/index-D2kyU37C.css",
     "revision": null
   }, {
     "url": "apple-touch-icon.png",

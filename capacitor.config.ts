@@ -12,6 +12,16 @@ const config: CapacitorConfig = {
       '*.googleapis.com',
       '*.gstatic.com'
     ]
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 600,
+      launchAutoHide: true,
+      backgroundColor: '#080a0f',
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false
+    }
   }
 };
 
