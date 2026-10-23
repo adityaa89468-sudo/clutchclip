@@ -127,7 +127,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == RC_GOOGLE_SIGN_IN) {
             Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
@@ -214,7 +214,7 @@ public class MainActivity extends BridgeActivity {
     private boolean isLoadingAppOpenAd = false;
 
     @Override
-    protected void onRestart() {
+    public void onRestart() {
         super.onRestart();
         if (!isPremiumAdFree()) {
             loadAndShowAppOpenAdForFreeUser();
