@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Deep Obsidian Chassis Gradient -->
+    <linearGradient id="bgChassis" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#131826" />
+      <stop offset="50%" stop-color="#0A0D16" />
+      <stop offset="100%" stop-color="#05070C" />
+    </linearGradient>
+
+    <!-- Outer Rim Metallic Gradient -->
+    <linearGradient id="rimGlow" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF2E54" stop-opacity="0.85" />
+      <stop offset="50%" stop-color="#334155" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.85" />
+    </linearGradient>
+
+    <!-- Primary Replay Arc Gradient (Crimson to Molten Amber) -->
+    <linearGradient id="clutchGrad" x1="80" y1="90" x2="432" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF2E54" />
+      <stop offset="52%" stop-color="#F43F5E" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+
+    <!-- Secondary Cyber Accent Gradient -->
+    <linearGradient id="boltGrad" x1="190" y1="130" x2="340" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFBEB" />
+      <stop offset="35%" stop-color="#FDE68A" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+
+    <!-- Inner Aperture Ring Gradient -->
+    <linearGradient id="apertureBlade" x1="120" y1="120" x2="392" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+
+    <!-- Ambient Core Radial Glow -->
+    <radialGradient id="coreGlow" cx="256" cy="256" r="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.32" />
+      <stop offset="55%" stop-color="#F59E0B" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Glass Specular Sheen -->
+    <linearGradient id="glassSheen" x1="256" y1="16" x2="256" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <filter id="neonDrop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#F43F5E" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- Squircle App Icon Base -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bgChassis)" stroke="url(#rimGlow)" stroke-width="10" />
+
+  <!-- Top Glass Highlight -->
+  <path d="M132 22H380C440 22 490 72 490 132V190C410 230 330 245 256 245C182 245 102 230 22 190V132C22 72 72 22 132 22Z" fill="url(#glassSheen)" />
+
+  <!-- Ambient Neon Radial Glow -->
+  <circle cx="256" cy="256" r="200" fill="url(#coreGlow)" />
+
+  <!-- Outer Precision Telemetry Tick Ring -->
+  <circle cx="256" cy="256" r="186" stroke="#1E293B" stroke-width="4" stroke-dasharray="8 14" />
+
+  <!-- Camera Shutter Aperture Inner Hexagon / Blades -->
+  <circle cx="256" cy="256" r="154" fill="url(#apertureBlade)" stroke="#334155" stroke-width="2.5" stroke-opacity="0.6" />
+  <path d="M256 102 L345 154 L196 154 Z" fill="#0F172A" opacity="0.65" />
+  <path d="M389 179 L389 282 L315 154 Z" fill="#1E293B" opacity="0.45" />
+  <path d="M389 333 L300 385 L350 256 Z" fill="#0F172A" opacity="0.65" />
+  <path d="M256 410 L167 358 L316 358 Z" fill="#1E293B" opacity="0.45" />
+  <path d="M123 333 L123 230 L197 358 Z" fill="#0F172A" opacity="0.65" />
+  <path d="M123 179 L212 127 L162 256 Z" fill="#1E293B" opacity="0.45" />
+
+  <!-- Bold Stylized 'C' Instant-Replay Sweeping Ribbon with Arrowhead -->
+  <g filter="url(#neonDrop)">
+    <path
+      d="M368 164 A 146 146 0 1 0 382 332"
+      stroke="url(#clutchGrad)"
+      stroke-width="44"
+      stroke-linecap="round"
+      fill="none"
+    />
+    <!-- Replay Rewind Arrowhead at Top-Right of the 'C' -->
+    <path
+      d="M332 114 L416 132 L380 210 Z"
+      fill="url(#clutchGrad)"
+      stroke="#FF2E54"
+      stroke-width="6"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <!-- Inner Secondary 'C' Speed Track -->
+  <path
+    d="M324 198 A 88 88 0 1 0 328 310"
+    stroke="#FFFFFF"
+    stroke-opacity="0.18"
+    stroke-width="10"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Center Play Triangle + Electric Clutch Lightning Bolt Fusion -->
+  <g filter="url(#neonDrop)">
+    <!-- Play / Lightning Core -->
+    <path
+      d="M226 172 L346 244 C356 250 356 262 346 268 L226 340 C216 346 204 338 206 326 L220 268 L188 268 C180 268 176 258 182 252 L242 174 C248 166 220 168 226 172 Z"
+      fill="url(#clutchGrad)"
+      opacity="0.2"
+    />
+    <path
+      d="M234 166 L352 242 C362 248 362 264 352 270 L234 346 C223 353 210 344 213 331 L228 268 L194 268 C185 268 181 257 187 250 L254 168 C262 158 224 160 234 166 Z"
+      fill="url(#boltGrad)"
+    />
+  </g>
+
+  <!-- Live REC Beacon Dot (Top Left Tactical Indicator) -->
+  <circle cx="96" cy="96" r="22" fill="#090D16" stroke="#334155" stroke-width="3" />
+  <circle cx="96" cy="96" r="11" fill="#FF2E54" />
+  <circle cx="92" cy="92" r="3.5" fill="#FFFFFF" opacity="0.9" />
+</svg>

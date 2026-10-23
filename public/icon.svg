@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="miniBg" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#161C2E" />
+      <stop offset="100%" stop-color="#070A12" />
+    </linearGradient>
+    <linearGradient id="miniRing" x1="20" y1="20" x2="236" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF2E54" />
+      <stop offset="55%" stop-color="#F43F5E" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+    <linearGradient id="miniBolt" x1="90" y1="56" x2="176" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#FDE68A" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Circular Mini-App HUD Badge Chassis -->
+  <circle cx="128" cy="128" r="120" fill="url(#miniBg)" stroke="url(#miniRing)" stroke-width="12" />
+
+  <!-- Sweeping Instant-Replay 'C' Arc -->
+  <path
+    d="M184 82 A 72 72 0 1 0 188 168"
+    stroke="url(#miniRing)"
+    stroke-width="26"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Replay Arrow Tip -->
+  <path d="M164 52 L212 64 L190 108 Z" fill="#FF2E54" />
+
+  <!-- High-Contrast Center Clutch Lightning Play Bolt -->
+  <path
+    d="M126 74 L182 118 C188 123 188 133 182 138 L126 182 C119 187 110 181 112 172 L122 136 L98 136 C92 136 89 129 93 124 L132 76 C137 70 120 70 126 74 Z"
+    fill="url(#miniBolt)"
+  />
+
+  <!-- Active REC Beacon -->
+  <circle cx="202" cy="54" r="18" fill="#070A12" />
+  <circle cx="202" cy="54" r="11" fill="#FF2E54" />
+  <circle cx="199" cy="51" r="3.5" fill="#FFFFFF" />
+</svg>

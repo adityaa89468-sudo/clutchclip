@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ClutchClip</string>
+    <string name="title_activity_main">ClutchClip</string>
+    <string name="package_name">com.adityaclutchclip994.app</string>
+    <string name="custom_url_scheme">com.adityaclutchclip994.app</string>
+</resources>

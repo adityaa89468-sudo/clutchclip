@@ -1,0 +1,14 @@
+{
+	"appId": "com.adityaclutchclip994.app",
+	"appName": "ClutchClip",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"allowNavigation": [
+			"notes-translator-bfed5.firebaseapp.com",
+			"*.google.com",
+			"*.googleapis.com",
+			"*.gstatic.com"
+		]
+	}
+}

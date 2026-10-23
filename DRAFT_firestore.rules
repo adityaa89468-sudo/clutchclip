@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 3. Entity Validation Blueprint: UserSubscription
+    function isValidUserSubscription(data) {
+      return data.keys().hasAll([
+        'uid',
+        'email',
+        'displayName',
+        'photoURL',
+        'tier',
+        'orderId',
+        'productId',
+        'amountPaid',
+        'paymentMethod',
+        'expiresAtMs',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid',
+        'email',
+        'displayName',
+        'photoURL',
+        'tier',
+        'orderId',
+        'productId',
+        'amountPaid',
+        'paymentMethod',
+        'expiresAtMs',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.uid is string &&
+      data.uid.size() >= 1 &&
+      data.uid.size() <= 128 &&
+      data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.uid == request.auth.uid &&
+      data.email is string &&
+      data.email.size() >= 3 &&
+      data.email.size() <= 256 &&
+      data.email == request.auth.token.email &&
+      data.displayName is string &&
+      data.displayName.size() >= 1 &&
+      data.displayName.size() <= 120 &&
+      data.photoURL is string &&
+      data.photoURL.size() <= 1024 &&
+      data.tier is string &&
+      data.tier.size() <= 32 &&
+      (data.tier == 'free' || data.tier == 'pro_2k' || data.tier == 'ultra_4k') &&
+      data.orderId is string &&
+      data.orderId.size() <= 128 &&
+      data.productId is string &&
+      data.productId.size() <= 128 &&
+      data.amountPaid is string &&
+      data.amountPaid.size() <= 32 &&
+      data.paymentMethod is string &&
+      data.paymentMethod.size() <= 64 &&
+      (data.expiresAtMs is int || data.expiresAtMs is number) &&
+      data.expiresAtMs >= 0 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // 4. Collection Match Block: /userSubscriptions/{userId}
+    match /userSubscriptions/{userId} {
+      // Strictly isolated PII & billing status: Only the verified owner can read their own document
+      allow get: if isVerifiedUser() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+
+      // Create: Must be verified owner, pass full schema validation, and use server timestamps
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUserSubscription(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      // Update: Action-based update pattern with validation helper first, immutable identity & createdAt
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUserSubscription(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Update Subscription Plan or Profile Sync
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName',
+            'photoURL',
+            'tier',
+            'orderId',
+            'productId',
+            'amountPaid',
+            'paymentMethod',
+            'expiresAtMs',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if false;
+    }
+  }
+}

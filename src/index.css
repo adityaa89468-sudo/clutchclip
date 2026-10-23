@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #080a0f;
+    color: #f1f5f9;
+    letter-spacing: -0.01em;
+  }
+
+  .font-display {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.025em;
+  }
+
+  .font-mono-numbers {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Touch Action optimizations for mobile gaming & recording */
+.touch-action-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subtle sleek scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* Pulse radar ring for buffer status */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(0.96);
+    opacity: 0.75;
+  }
+}
+
+.animate-radar {
+  animation: radar-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

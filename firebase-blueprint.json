@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "UserSubscription": {
+      "title": "UserSubscription",
+      "description": "Stores a signed-in Google user profile and their active ClutchClip Google Play Billing subscription status.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address of the subscriber.",
+          "minLength": 3,
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name from Google Sign-In profile.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar photo URL from Google Sign-In profile.",
+          "maxLength": 1024
+        },
+        "tier": {
+          "type": "string",
+          "description": "Active membership tier for this user account.",
+          "enum": ["free", "pro_2k", "ultra_4k"],
+          "maxLength": 32
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Google Play Billing Order ID (e.g., GPA.xxxx) or empty string if free.",
+          "maxLength": 128
+        },
+        "productId": {
+          "type": "string",
+          "description": "Google Play SKU ID or empty string if free.",
+          "maxLength": 128
+        },
+        "amountPaid": {
+          "type": "string",
+          "description": "Formatted amount paid (e.g. ₹29.00, ₹99.00, or ₹0).",
+          "maxLength": 32
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment channel label (e.g., Google Play Billing).",
+          "maxLength": 64
+        },
+        "expiresAtMs": {
+          "type": "number",
+          "description": "Epoch timestamp in milliseconds when the 1-month subscription expires (0 if free)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the user record was first created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the subscription record was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "photoURL",
+        "tier",
+        "orderId",
+        "productId",
+        "amountPaid",
+        "paymentMethod",
+        "expiresAtMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/userSubscriptions/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserSubscription"
+      },
+      "description": "Private per-user profile and Google Play Billing subscription document keyed by Firebase Auth UID."
+    }
+  }
+}

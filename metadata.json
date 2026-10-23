@@ -1,0 +1,11 @@
+{
+  "name": "ClutchClip - Mobile 5-Min Replay Buffer",
+  "description": "Continuous 5-minute rolling buffer screen recorder for mobile gameplay highlights, clutch clips, and retroactive instant replay.",
+  "requestFramePermissions": [
+    "display-capture"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+
