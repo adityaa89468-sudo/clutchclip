@@ -40,6 +40,10 @@ import {
   fetchUserSubscriptionFromFirestore,
   ensureUserSubscriptionRecord,
   subscribeToUserSubscription,
+  buildDefaultUserSubscription,
+  registerGoogleSignInModalListener,
+  completeModalGoogleSignIn,
+  cancelModalGoogleSignIn,
   User,
   UserSubscriptionRecord
 } from './services/firebase';
@@ -63,10 +67,10 @@ import { useLowPowerMode } from './hooks/useLowPowerMode';
 import { nativeAndroidBridge } from './services/nativeAndroidBridge';
 import { admobService } from './services/admobService';
 import { AdMobBannerBar } from './components/AdMobBannerBar';
-import { AdMobAppOpenModal } from './components/AdMobAppOpenModal';
 import { LegalSettingsFooter } from './components/LegalSettingsFooter';
 import { FirstLaunchIntroModal, ONBOARDING_STORAGE_KEY } from './components/FirstLaunchIntroModal';
 import { SplashScreen } from './components/SplashScreen';
+import { GoogleSignInModal } from './components/GoogleSignInModal';
 
 type Tab = 'screen' | 'buffer' | 'premium' | 'vault' | 'settings';
 
@@ -103,7 +107,6 @@ export default function App() {
       : 30;
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [premiumTargetFeature, setPremiumTargetFeature] = useState<string | undefined>(undefined);
-  const [isAppOpenAdVisible, setIsAppOpenAdVisible] = useState(false);
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [showFirstLaunchIntro, setShowFirstLaunchIntro] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -120,20 +123,7 @@ export default function App() {
   // Sync AdMob Ad-Free status with Native Android APK whenever membership tier changes
   useEffect(() => {
     admobService.syncMembershipTier(userTier);
-    if (userTier !== 'free') {
-      setIsAppOpenAdVisible(false);
-    }
   }, [userTier]);
-
-  // Trigger AdMob App Open Ad (ca-app-pub-9364231981895017/9335774357) on launch for Free users only (after splash & one-time intro complete)
-  useEffect(() => {
-    if (!showSplash && userTier === 'free' && !showFirstLaunchIntro) {
-      const triggered = admobService.requestAppOpenAdOnLaunch(userTier);
-      if (triggered) {
-        setIsAppOpenAdVisible(true);
-      }
-    }
-  }, [showSplash, showFirstLaunchIntro]);
 
   // Logo & Watermark Configuration (Remove watermark / hide logo is available to subscribed users only)
   const [logoConfig, setLogoConfig] = useState<LogoConfig>(() => {
@@ -252,9 +242,14 @@ export default function App() {
     }
   }, []);
 
+  const [isGoogleSignInModalOpen, setIsGoogleSignInModalOpen] = useState<boolean>(false);
+
   // Listen to Firebase Auth state & sync the signed-in user's Firestore subscription record
   useEffect(() => {
     let unsubFirestore: (() => void) | null = null;
+    const unsubModal = registerGoogleSignInModalListener((open) => {
+      setIsGoogleSignInModalOpen(open);
+    });
 
     // Complete any pending APK / mobile redirect or URL token sign-in
     checkRedirectSignInResult()
@@ -291,7 +286,8 @@ export default function App() {
           }
         });
       } catch (err) {
-        console.error('Failed to sync user subscription from Firestore:', err);
+        console.warn('Firestore subscription sync deferred (using local profile cache):', err);
+        applyFirestoreSubscriptionRecord(buildDefaultUserSubscription(user));
       } finally {
         setIsAuthLoading(false);
       }
@@ -299,6 +295,7 @@ export default function App() {
 
     return () => {
       unsubAuth();
+      unsubModal();
       if (unsubFirestore) unsubFirestore();
     };
   }, [applyFirestoreSubscriptionRecord, showToast]);
@@ -397,7 +394,7 @@ export default function App() {
       if (activeUser) {
         saveUserSubscriptionToFirestore(activeUser, 'free', null)
           .then((rec) => setSubscriptionRecord(rec))
-          .catch((e) => console.error(e));
+          .catch((e) => console.warn('Subscription update cached locally:', e));
       }
       showToast('Switched to Free Tier (Watermark active)');
     } else if (tier === 'pro_2k') {
@@ -416,7 +413,7 @@ export default function App() {
       if (activeUser) {
         saveUserSubscriptionToFirestore(activeUser, 'pro_2k', receipt)
           .then((rec) => setSubscriptionRecord(rec))
-          .catch((e) => console.error(e));
+          .catch((e) => console.warn('Subscription update cached locally:', e));
       }
       showToast(
         `👑 Google Play Verified: Premium (2K + 90 FPS) linked to ${activeUser?.email || 'your account'}!`
@@ -437,7 +434,7 @@ export default function App() {
       if (activeUser) {
         saveUserSubscriptionToFirestore(activeUser, 'ultra_4k', receipt)
           .then((rec) => setSubscriptionRecord(rec))
-          .catch((e) => console.error(e));
+          .catch((e) => console.warn('Subscription update cached locally:', e));
       }
       showToast(
         `👑 Google Play Verified: Premium Plus (4K + 120 FPS) linked to ${activeUser?.email || 'your account'}!`
@@ -600,7 +597,6 @@ export default function App() {
   const handleToggleBuffer = async () => {
     if (isBuffering) {
       replayEngine.stopBuffer();
-      nativeAndroidBridge.stopNativeReplayBuffer();
       setIsBuffering(false);
       showToast('Replay buffer stopped');
       return;
@@ -615,7 +611,6 @@ export default function App() {
         lowPowerConfig.targetFps,
         lowPowerConfig.bitrateScale
       );
-      nativeAndroidBridge.startNativeReplayBuffer(effectiveResolution, effectiveFps);
       await replayEngine.startBuffer('screen_capture', null, audioMode);
       setIsBuffering(true);
       showToast(
@@ -625,7 +620,7 @@ export default function App() {
       );
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Could not activate buffer';
-      showToast(`Screen share: ${errorMsg}`);
+      showToast(`Screen capture: ${errorMsg}`);
     }
   };
 
@@ -633,14 +628,13 @@ export default function App() {
   const handleClip = async (durationSecs: number) => {
     if (isSavingClip) return;
     setIsSavingClip(true);
-    nativeAndroidBridge.saveNativeRetroactiveClip(durationSecs, currentGameName);
     showToast(`Packaging last ${durationSecs >= 60 ? Math.floor(durationSecs / 60) + ' min' : durationSecs + 's'} highlight...`);
 
     try {
       const clip = await replayEngine.clipHighlight(durationSecs, undefined, currentGameName);
       if (!clip) {
         setIsSavingClip(false);
-        showToast('Buffer was empty. Keep playing to fill buffer!');
+        showToast('Buffer was empty. Keep playing for a few seconds to fill buffer!');
       }
     } catch (err) {
       setIsSavingClip(false);
@@ -730,7 +724,7 @@ export default function App() {
           )}
           <button
             onClick={() => handleClip(maxBufferSeconds)}
-            disabled={!isBuffering || bufferedSeconds < 10 || isSavingClip}
+            disabled={!isBuffering || bufferedSeconds < 1 || isSavingClip}
             className="py-1.5 px-3.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold font-display transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             title="Clip Last 5 Minutes Highlight"
           >
@@ -760,7 +754,7 @@ export default function App() {
       )}
 
       {/* Main Tab Content Viewport */}
-      <main className={`flex-1 p-4 sm:p-6 ${isPremium ? 'pb-24' : 'pb-36'} overflow-y-auto`}>
+      <main className="flex-1 p-4 sm:p-6 pb-24 overflow-y-auto">
         {/* Toast Banner */}
         {toastMessage && (
           <div className="fixed top-16 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-top-3 duration-150">
@@ -850,6 +844,13 @@ export default function App() {
               onSetLowPowerPolicy={setLowPowerPolicy}
             />
 
+            {/* Inline Ad slot in the empty space between LiveBufferPanel and LowPowerModeCard */}
+            <AdMobBannerBar
+              isPremium={isPremium}
+              onOpenPremium={() => setActiveTab('premium')}
+              variant="native"
+            />
+
             {/* Low Power Mode Configuration Card inside Buffer Tab */}
             <LowPowerModeCard
               config={lowPowerConfig}
@@ -885,17 +886,26 @@ export default function App() {
 
         {/* Tab 3: Highlights Vault & Library */}
         {activeTab === 'vault' && (
-          <HighlightVault
-            highlights={highlights}
-            onDeleteHighlight={handleDeleteHighlight}
-            onRenameHighlight={handleRenameHighlight}
-            onOpenEditor={(h) => {
-              setSelectedForEdit(h);
-            }}
-            onSelectPlay={(h) => {
-              setSelectedForPlay(h);
-            }}
-          />
+          <div className="w-full max-w-3xl mx-auto space-y-5">
+            <HighlightVault
+              highlights={highlights}
+              onDeleteHighlight={handleDeleteHighlight}
+              onRenameHighlight={handleRenameHighlight}
+              onOpenEditor={(h) => {
+                setSelectedForEdit(h);
+              }}
+              onSelectPlay={(h) => {
+                setSelectedForPlay(h);
+              }}
+            />
+
+            {/* Inline Ad slot in the empty space below Highlight Vault */}
+            <AdMobBannerBar
+              isPremium={isPremium}
+              onOpenPremium={() => setActiveTab('premium')}
+              variant="native"
+            />
+          </div>
         )}
 
         {/* Tab 4: Settings & Profile */}
@@ -921,6 +931,13 @@ export default function App() {
               onSignOut={handleSignOut}
               onSyncSubscription={handleSyncSubscription}
               onOpenPremium={() => setActiveTab('premium')}
+            />
+
+            {/* Inline Ad slot in the empty space between Profile Card and Video Quality Card */}
+            <AdMobBannerBar
+              isPremium={isPremium}
+              onOpenPremium={() => setActiveTab('premium')}
+              variant="compact"
             />
 
             {/* Video Quality & Frame Rate Settings Card */}
@@ -1164,6 +1181,13 @@ export default function App() {
               onClearAllHighlights={handleClearAllHighlights}
             />
 
+            {/* Inline Ad slot in the empty space between Storage Card and Legal Footer */}
+            <AdMobBannerBar
+              isPremium={isPremium}
+              onOpenPremium={() => setActiveTab('premium')}
+              variant="native"
+            />
+
             {/* Privacy Policy, Terms & Conditions, and Created by Aditya Attribution */}
             <LegalSettingsFooter />
           </div>
@@ -1207,14 +1231,14 @@ export default function App() {
           onRequireGoogleSignIn={handleSignInWithGoogle}
         />
 
-        {/* Google AdMob App Open Ad Overlay (Free Tier Only; Removed for Premium Users) */}
-        <AdMobAppOpenModal
-          isOpen={isAppOpenAdVisible && !showSplash && !showFirstLaunchIntro}
-          isPremium={isPremium}
-          onClose={() => setIsAppOpenAdVisible(false)}
-          onUpgradePremium={() => {
-            setIsAppOpenAdVisible(false);
-            setActiveTab('premium');
+        {/* In-App Google Account Sign-In Modal (for APK WebView & popup-restricted environments) */}
+        <GoogleSignInModal
+          isOpen={isGoogleSignInModalOpen}
+          onSelectAccount={async (profile) => {
+            await completeModalGoogleSignIn(profile);
+          }}
+          onCancel={() => {
+            cancelModalGoogleSignIn();
           }}
         />
 
@@ -1228,12 +1252,6 @@ export default function App() {
           <SplashScreen onFinish={() => setShowSplash(false)} />
         )}
       </main>
-
-      {/* Google AdMob Sticky Banner Ad - Free Users Only */}
-      <AdMobBannerBar
-        isPremium={isPremium}
-        onOpenPremium={() => setActiveTab('premium')}
-      />
 
       {/* Fixed Bottom Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0b0e14]/95 backdrop-blur-md border-t border-white/[0.06]">

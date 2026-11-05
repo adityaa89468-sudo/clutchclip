@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { X, Play, Pause, Download, Share2, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { SavedHighlight, AUDIO_MODE_OPTIONS } from '../types/recorder';
+import { nativeAndroidBridge } from '../services/nativeAndroidBridge';
 
 interface VideoPlayerModalProps {
   highlight: SavedHighlight;
@@ -28,9 +29,14 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
   };
 
   const handleDownload = () => {
+    if (nativeAndroidBridge.isRunningInNativeApk()) {
+      nativeAndroidBridge.showNativeToast('Saved in Gallery (Movies/ClutchClip)');
+      return;
+    }
+    const ext = highlight.blob?.type?.includes('mp4') ? 'mp4' : 'webm';
     const a = document.createElement('a');
     a.href = highlight.videoUrl;
-    a.download = `${highlight.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.webm`;
+    a.download = `${highlight.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.${ext}`;
     a.click();
   };
 

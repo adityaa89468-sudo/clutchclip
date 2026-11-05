@@ -1,10 +1,10 @@
 import React from 'react';
-import { SubscriptionTier } from '../types/replay';
+import { MembershipTier } from '../types/recorder';
 
 interface MobileDeviceSimulatorProps {
   children: React.ReactNode;
   onOpenPremium?: () => void;
-  userTier?: SubscriptionTier;
+  userTier?: MembershipTier;
   daysRemaining?: number;
   isBuffering?: boolean;
   onQuickClip5m?: () => void;

@@ -42,6 +42,7 @@ import { replayEngine } from '../services/replayBufferEngine';
 import { soundEffects } from '../services/soundEffects';
 import { GameDetectionResult } from '../services/gameDetector';
 import { AppLogo } from './AppLogo';
+import { AdMobBannerBar } from './AdMobBannerBar';
 
 interface LiveScreenMonitorProps {
   isBuffering: boolean;
@@ -371,6 +372,13 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Non-intrusive inline Ad slot in the empty space between Primary Launch Card and Studio Configuration Card (Free Tier Only) */}
+          <AdMobBannerBar
+            isPremium={isPremium}
+            onOpenPremium={() => onRequirePremium('Ad-Free Experience (Premium · ₹29)')}
+            variant="compact"
+          />
 
           {/* Studio Configuration Card (Single-level container with clean hairline dividers) */}
           <div className="rounded-2xl bg-[#121620] border border-white/[0.07] divide-y divide-white/[0.06]">
@@ -950,6 +958,13 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Non-intrusive inline Ad slot in the empty space below Instant Highlight Triggers (Free Tier Only) */}
+          <AdMobBannerBar
+            isPremium={isPremium}
+            onOpenPremium={() => onRequirePremium('Ad-Free Experience (Premium · ₹29)')}
+            variant="native"
+          />
         </div>
       )}
     </div>

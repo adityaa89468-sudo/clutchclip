@@ -14,6 +14,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { SavedHighlight, AUDIO_MODE_OPTIONS } from '../types/recorder';
+import { nativeAndroidBridge } from '../services/nativeAndroidBridge';
 
 interface HighlightVaultProps {
   highlights: SavedHighlight[];
@@ -58,25 +59,35 @@ export const HighlightVault: React.FC<HighlightVaultProps> = ({
   // Download clip file
   const handleDownload = (highlight: SavedHighlight, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (nativeAndroidBridge.isRunningInNativeApk()) {
+      nativeAndroidBridge.showNativeToast('Saved in Gallery (Movies/ClutchClip)');
+      return;
+    }
+    const ext = highlight.blob?.type?.includes('mp4') ? 'mp4' : 'webm';
     const a = document.createElement('a');
     a.href = highlight.videoUrl;
     const sanitizedTitle = highlight.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    a.download = `${sanitizedTitle}_highlight.webm`;
+    a.download = `${sanitizedTitle}_highlight.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
-  // Native Mobile Web Share API
+  // Native Mobile Web Share API + Native APK Share Sheet
   const handleShare = async (highlight: SavedHighlight, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
+      if (nativeAndroidBridge.isRunningInNativeApk()) {
+        const shared = nativeAndroidBridge.shareNativeClip(highlight.id, highlight.title);
+        if (shared) return;
+      }
+      const ext = highlight.blob?.type?.includes('mp4') ? 'mp4' : 'webm';
       if (navigator.share && navigator.canShare) {
-        const file = new File([highlight.blob], `${highlight.title}.webm`, { type: highlight.blob.type });
+        const file = new File([highlight.blob], `${highlight.title}.${ext}`, { type: highlight.blob.type || 'video/mp4' });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: highlight.title,
-            text: `Check out this 5-minute gameplay highlight from ClutchClip!`,
+            text: `Check out this gameplay highlight from ClutchClip!`,
             files: [file],
           });
           return;

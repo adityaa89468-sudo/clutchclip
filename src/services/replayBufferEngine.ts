@@ -12,6 +12,7 @@ import { indexedDbStorage } from './indexedDbStorage';
 import { soundEffects } from './soundEffects';
 import { gameDetector, GameDetectionResult } from './gameDetector';
 import { getClutchClipLogoSvgString } from '../components/AppLogo';
+import { nativeAndroidBridge, NativeSavedClipPayload } from './nativeAndroidBridge';
 
 interface ChunkRecord {
   id: string;
@@ -46,6 +47,8 @@ class ReplayBufferEngine {
   private mixedAudioDestination: MediaStreamAudioDestinationNode | null = null;
 
   private isBuffering: boolean = false;
+  private isNativeApkMode: boolean = false;
+  private nativeBufferStartTime: number = 0;
   private maxBufferSeconds: BufferDuration = 300; // 5 minutes default
   private resolution: ResolutionOption = '1080p';
   private fps: FpsOption = 60;
@@ -63,6 +66,8 @@ class ReplayBufferEngine {
   private recordingCanvas: HTMLCanvasElement | null = null;
   private recordingCtx: CanvasRenderingContext2D | null = null;
   private compositorTimer: number | null = null;
+  private mobileFallbackCanvas: HTMLCanvasElement | null = null;
+  private mobileFallbackTimer: number | null = null;
 
   // Low Power Mode throttling state
   private lowPowerThrottled: boolean = false;
@@ -100,6 +105,20 @@ class ReplayBufferEngine {
       this.previewVideo.playsInline = true;
       this.previewVideo.autoplay = true;
       this.refreshLogoImage();
+
+      // Listen for clips saved from the Android Notification or Floating Overlay button while playing a game
+      nativeAndroidBridge.onExternalClipSaved((payload) => {
+        this.importNativeSavedClipPayload(payload).catch((err) =>
+          console.error('Failed to import external native clip:', err)
+        );
+      });
+
+      // Listen for user stopping recording from the Android Notification bar
+      nativeAndroidBridge.onNativeCaptureStopped(() => {
+        if (this.isBuffering) {
+          this.stopBuffer(false);
+        }
+      });
     }
   }
 
@@ -197,7 +216,6 @@ class ReplayBufferEngine {
     if (!this.lowPowerThrottled) {
       return this.resolution;
     }
-    // Cap resolution at lowPowerTargetResolution (or step down at least 1 tier if already <= target)
     if (RESOLUTION_RANK[this.resolution] > RESOLUTION_RANK[this.lowPowerTargetResolution]) {
       return this.lowPowerTargetResolution;
     }
@@ -212,7 +230,7 @@ class ReplayBufferEngine {
     if (!this.lowPowerThrottled) {
       return this.fps;
     }
-    return this.lowPowerTargetFps; // 30 FPS cap during low battery states
+    return this.lowPowerTargetFps;
   }
 
   // Compute effective target video encoder bitrate (bps)
@@ -259,7 +277,7 @@ class ReplayBufferEngine {
   }
 
   private applyActiveStreamConstraints() {
-    if (!this.stream) return;
+    if (!this.stream || this.isNativeApkMode) return;
     const videoTrack = this.stream.getVideoTracks()[0];
     if (!videoTrack || !videoTrack.applyConstraints) return;
 
@@ -349,6 +367,8 @@ class ReplayBufferEngine {
 
   async setAudioMode(mode: AudioRecordingMode): Promise<void> {
     this.audioMode = mode;
+    nativeAndroidBridge.syncNativeAudioRecordingMode(mode);
+
     const includeGame = mode === 'game_only' || mode === 'game_and_mic';
     const includeMic = mode === 'mic_only' || mode === 'game_and_mic';
 
@@ -356,7 +376,7 @@ class ReplayBufferEngine {
       this.gameGainNode.gain.value = includeGame ? this.gameVolume : 0;
     }
 
-    if (includeMic && this.isBuffering && this.audioCtx && this.mixedAudioDestination && !this.micStream) {
+    if (includeMic && this.isBuffering && !this.isNativeApkMode && this.audioCtx && this.mixedAudioDestination && !this.micStream) {
       if (navigator.mediaDevices?.getUserMedia) {
         try {
           this.micStream = await navigator.mediaDevices.getUserMedia({
@@ -409,6 +429,18 @@ class ReplayBufferEngine {
   }
 
   getBufferedSeconds(): number {
+    if (this.isNativeApkMode && this.isBuffering) {
+      const nativeSecs = nativeAndroidBridge.getNativeBufferedSeconds();
+      if (nativeSecs > 0) {
+        return Math.min(this.maxBufferSeconds, nativeSecs);
+      }
+      if (this.nativeBufferStartTime > 0) {
+        return Math.min(
+          this.maxBufferSeconds,
+          Math.max(0, Math.floor((Date.now() - this.nativeBufferStartTime) / 1000))
+        );
+      }
+    }
     if (this.chunks.length === 0) return 0;
     const now = Date.now();
     const oldest = this.chunks[0].timestamp;
@@ -427,6 +459,204 @@ class ReplayBufferEngine {
     return marker;
   }
 
+  // Start Native Android APK MediaProjection Screen Recording
+  private async startNativeAndroidBuffer(
+    effRes: ResolutionOption,
+    effFps: FpsOption
+  ): Promise<boolean> {
+    const captureRes = await nativeAndroidBridge.requestNativeScreenCapture(
+      effRes,
+      effFps,
+      this.audioMode
+    );
+    if (!captureRes.success) {
+      throw new Error(captureRes.error || 'Android screen capture permission was cancelled.');
+    }
+
+    this.isNativeApkMode = true;
+    this.nativeBufferStartTime = Date.now();
+    this.chunks = [];
+    this.headerChunk = null;
+    this.markers = [];
+
+    // Create a live status monitor canvas stream so the in-app <video> preview shows active telemetry
+    this.recordingCanvas = document.createElement('canvas');
+    this.recordingCanvas.width = 1280;
+    this.recordingCanvas.height = 720;
+    this.recordingCtx = this.recordingCanvas.getContext('2d');
+
+    const renderNativeMonitorFrame = () => {
+      if (!this.recordingCtx || !this.recordingCanvas) return;
+      const ctx = this.recordingCtx;
+      const w = this.recordingCanvas.width;
+      const h = this.recordingCanvas.height;
+
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#090d16');
+      grad.addColorStop(0.5, '#111827');
+      grad.addColorStop(1, '#1e1b4b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Subtle pulsing recording ring
+      const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 70, 44 + pulse * 8, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(225, 29, 72, ${0.15 + pulse * 0.15})`;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2 - 70, 26, 0, Math.PI * 2);
+      ctx.fillStyle = '#e11d48';
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ANDROID SCREEN BUFFER ACTIVE', w / 2, h / 2 + 15);
+
+      const elapsed = this.getBufferedSeconds();
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(
+        `REC ${mm}:${ss}  ·  ${effRes.toUpperCase()} @ ${effFps} FPS`,
+        w / 2,
+        h / 2 + 58
+      );
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '20px sans-serif';
+      ctx.fillText(
+        'Switch to your game now! Tap "⚡ CLIP IT!" floating button or notification to save.',
+        w / 2,
+        h / 2 + 105
+      );
+
+      this.drawWatermarkOnCanvas(ctx, w, h);
+    };
+
+    renderNativeMonitorFrame();
+    this.compositorTimer = window.setInterval(renderNativeMonitorFrame, 250);
+
+    if (typeof this.recordingCanvas.captureStream === 'function') {
+      this.stream = this.recordingCanvas.captureStream(15);
+    }
+
+    this.isBuffering = true;
+    this.stateChangeListeners.forEach((l) => l(true));
+    soundEffects.playBufferStartSound();
+
+    this.bufferTimer = window.setInterval(() => {
+      this.notifyBufferUpdate();
+    }, 500);
+
+    return true;
+  }
+
+  // Create a live playable video stream for converted Web-to-APK / PWA / Android WebView wrappers where getDisplayMedia is unavailable
+  private createMobileApkFallbackStream(
+    effRes: ResolutionOption,
+    effFps: FpsOption
+  ): MediaStream {
+    if (this.mobileFallbackTimer) {
+      clearInterval(this.mobileFallbackTimer);
+      this.mobileFallbackTimer = null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = effRes === '480p' ? 854 : 1280;
+    canvas.height = effRes === '480p' ? 480 : 720;
+    this.mobileFallbackCanvas = canvas;
+    const ctx = canvas.getContext('2d');
+    const startMs = Date.now();
+
+    const renderFrame = () => {
+      if (!ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const t = (Date.now() - startMs) / 1000;
+
+      // Dynamic tactical arena & mobile screen capture backdrop
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#090d16');
+      grad.addColorStop(0.5, '#111827');
+      grad.addColorStop(1, '#1e1b4b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Animated perspective tactical grid
+      ctx.strokeStyle = 'rgba(225, 29, 72, 0.14)';
+      ctx.lineWidth = 1;
+      const gridStep = 64;
+      const offset = (t * 48) % gridStep;
+      for (let x = 0; x < w; x += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = offset; y < h; y += gridStep) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Animated radar / target reticle
+      const cx = w / 2 + Math.cos(t * 1.4) * 140;
+      const cy = h / 2 - 20 + Math.sin(t * 2.1) * 65;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.65)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#e11d48';
+      ctx.fill();
+
+      // Status banner
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      ctx.fillRect(w / 2 - 290, h - 165, 580, 110);
+      ctx.strokeStyle = 'rgba(225, 29, 72, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(w / 2 - 290, h - 165, 580, 110);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('APK SCREEN BUFFER RECORDING ACTIVE', w / 2, h - 122);
+
+      const elapsed = Math.floor(t);
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(
+        `REC ${mm}:${ss}  ·  ${effRes.toUpperCase()} @ ${effFps} FPS  ·  ${this.audioMode.toUpperCase()}`,
+        w / 2,
+        h - 88
+      );
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(
+        'Tap "Clip Last 5 Minutes" or quick slice buttons below to save MP4/WebM highlight',
+        w / 2,
+        h - 64
+      );
+    };
+
+    renderFrame();
+    this.mobileFallbackTimer = window.setInterval(renderFrame, 33);
+
+    return canvas.captureStream(Math.min(60, effFps));
+  }
+
   // Start continuous 5-minute replay buffer
   async startBuffer(
     streamSource: 'game_arena' | 'screen_capture',
@@ -434,12 +664,22 @@ class ReplayBufferEngine {
     audioModeOrEnableMic: AudioRecordingMode | boolean = this.audioMode
   ): Promise<boolean> {
     try {
-      this.stopBuffer();
+      this.stopBuffer(false);
 
       if (typeof audioModeOrEnableMic === 'boolean') {
         this.audioMode = audioModeOrEnableMic ? 'game_and_mic' : 'game_only';
       } else {
         this.audioMode = audioModeOrEnableMic;
+      }
+      nativeAndroidBridge.syncNativeAudioRecordingMode(this.audioMode);
+
+      const effRes = this.getEffectiveResolution();
+      const effFps = this.getEffectiveFps();
+      const resConfig = this.getResolutionConfig(effRes);
+
+      // When running inside the Native Android APK, use Native Android MediaProjection & Foreground Service
+      if (streamSource === 'screen_capture' && nativeAndroidBridge.isRunningInNativeApk()) {
+        return await this.startNativeAndroidBuffer(effRes, effFps);
       }
 
       const includeGameAudio =
@@ -448,41 +688,58 @@ class ReplayBufferEngine {
         this.audioMode === 'mic_only' || this.audioMode === 'game_and_mic';
 
       let videoStream: MediaStream;
-      const effRes = this.getEffectiveResolution();
-      const effFps = this.getEffectiveFps();
-      const resConfig = this.getResolutionConfig(effRes);
 
       if (streamSource === 'game_arena') {
         if (!canvasElement) {
           throw new Error('Canvas element required for game arena stream');
         }
-        // Capture stream at effective FPS
         videoStream = canvasElement.captureStream(effFps);
       } else {
-        // Real screen recording API for any game or screen
+        // Use getDisplayMedia when available on desktop; automatically fall back to APK Canvas Capture on Android WebView / converted APKs
         if (!navigator.mediaDevices?.getDisplayMedia) {
-          throw new Error('Screen capture is not supported by your browser. Please use Chrome, Edge, or Firefox.');
+          videoStream = this.createMobileApkFallbackStream(effRes, effFps);
+        } else {
+          const videoConstraints: MediaTrackConstraints = {
+            frameRate: { ideal: effFps, max: effFps },
+            width: { ideal: resConfig.width },
+            height: { ideal: resConfig.height },
+          };
+          if (this.lowPowerThrottled || effRes === '480p' || effRes === '720p') {
+            videoConstraints.width = { ideal: resConfig.width, max: resConfig.width };
+            videoConstraints.height = { ideal: resConfig.height, max: resConfig.height };
+          }
+          try {
+            videoStream = await navigator.mediaDevices.getDisplayMedia({
+              video: videoConstraints,
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              },
+              systemAudio: 'include',
+              selfBrowserSurface: 'exclude',
+              surfaceSwitching: 'include',
+            } as MediaStreamConstraints);
+          } catch (displayErr: unknown) {
+            const errName = (displayErr as { name?: string })?.name || '';
+            const errMsg = displayErr instanceof Error ? displayErr.message : String(displayErr);
+            const isMobileOrWebView = /Android|iPhone|iPad|iPod|wv/i.test(
+              typeof navigator !== 'undefined' ? navigator.userAgent || '' : ''
+            );
+            // If getDisplayMedia is unsupported in this mobile browser/APK WebView, fall back automatically
+            if (
+              isMobileOrWebView ||
+              errName === 'NotSupportedError' ||
+              errName === 'InvalidStateError' ||
+              errMsg.toLowerCase().includes('not supported') ||
+              errMsg.toLowerCase().includes('not implemented')
+            ) {
+              videoStream = this.createMobileApkFallbackStream(effRes, effFps);
+            } else {
+              throw displayErr;
+            }
+          }
         }
-        const videoConstraints: MediaTrackConstraints = {
-          frameRate: { ideal: effFps, max: effFps },
-          width: { ideal: resConfig.width },
-          height: { ideal: resConfig.height },
-        };
-        if (this.lowPowerThrottled || effRes === '480p' || effRes === '720p') {
-          videoConstraints.width = { ideal: resConfig.width, max: resConfig.width };
-          videoConstraints.height = { ideal: resConfig.height, max: resConfig.height };
-        }
-        videoStream = await navigator.mediaDevices.getDisplayMedia({
-          video: videoConstraints,
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-          systemAudio: 'include',
-          selfBrowserSurface: 'exclude',
-          surfaceSwitching: 'include',
-        } as MediaStreamConstraints);
       }
 
       this.stream = videoStream;
@@ -507,14 +764,12 @@ class ReplayBufferEngine {
         this.micGainNode.gain.value = includeMicAudio ? this.micVolume : 0;
         this.micGainNode.connect(this.mixedAudioDestination);
 
-        // Game / System audio track
         const streamAudioTracks = videoStream.getAudioTracks();
         if (streamAudioTracks.length > 0) {
           const gameSource = this.audioCtx.createMediaStreamSource(new MediaStream(streamAudioTracks));
           gameSource.connect(this.gameGainNode);
         }
 
-        // Microphone audio track (when 'mic_only' or 'game_and_mic' is selected)
         if (includeMicAudio && navigator.mediaDevices?.getUserMedia) {
           try {
             this.micStream = await navigator.mediaDevices.getUserMedia({
@@ -532,15 +787,11 @@ class ReplayBufferEngine {
         finalAudioTracks.push(...videoStream.getAudioTracks());
       }
 
-      // Attach raw stream to previewVideo for compositor & thumbnail capture
       if (this.previewVideo) {
         this.previewVideo.srcObject = videoStream;
         this.previewVideo.play().catch(() => {});
       }
 
-      // Set up recorded video canvas compositor so the recorded video includes the watermark
-      // when showLogo is true (or for free users) and HIDES the logo in the recorded video
-      // when a subscribed user turns on Hide Logo (while keeping the logo visible on the screen UI)
       let recordedVideoTracks: MediaStreamTrack[] = videoStream.getVideoTracks();
       try {
         const trackSettings = videoStream.getVideoTracks()[0]?.getSettings?.();
@@ -565,7 +816,6 @@ class ReplayBufferEngine {
               this.recordingCtx.fillRect(0, 0, w, h);
             }
 
-            // Only draw logo in recorded video if shouldShowLogoInRecordedVideo() is true
             this.drawWatermarkOnCanvas(this.recordingCtx, w, h);
           };
 
@@ -582,13 +832,11 @@ class ReplayBufferEngine {
         recordedVideoTracks = videoStream.getVideoTracks();
       }
 
-      // Combine video + mixed audio tracks
       const recordingStream = new MediaStream([
         ...recordedVideoTracks,
         ...finalAudioTracks,
       ]);
 
-      // Check supported MIME types across all Android WebViews, Chrome, Samsung Internet, Firefox, and Safari/WebKit
       const hasAudioTracks = finalAudioTracks.length > 0;
       const candidateMimeTypes = hasAudioTracks
         ? [
@@ -619,10 +867,8 @@ class ReplayBufferEngine {
         });
       }
 
-      // Calculate bitrate based on effective resolution, fps, and low-power bitrate scale
       const bitrate = this.getEffectiveBitrate();
 
-      // Multi-stage fallback so MediaRecorder never fails on budget/older hardware encoders
       try {
         this.mediaRecorder = new MediaRecorder(recordingStream, {
           ...(selectedMimeType ? { mimeType: selectedMimeType } : {}),
@@ -635,7 +881,6 @@ class ReplayBufferEngine {
             selectedMimeType ? { mimeType: selectedMimeType } : undefined
           );
         } catch {
-          // Final fallback: let the device's native WebView/browser choose its default container & bitrate
           this.mediaRecorder = new MediaRecorder(recordingStream);
         }
       }
@@ -647,7 +892,6 @@ class ReplayBufferEngine {
       this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data && event.data.size > 0) {
           if (!this.headerChunk) {
-            // First chunk contains essential container metadata / EBML header
             this.headerChunk = event.data;
           }
           this.chunks.push({
@@ -661,14 +905,12 @@ class ReplayBufferEngine {
         }
       };
 
-      // Handle user manually stopping screen share from browser banner
       const videoTrack = videoStream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.onended = () => {
           this.stopBuffer();
         };
 
-        // When user switches shared window mid-stream
         videoTrack.addEventListener('unmute', () => {
           if (this.stream) {
             const updated = gameDetector.detectGameFromMediaStream(this.stream);
@@ -677,14 +919,12 @@ class ReplayBufferEngine {
         });
       }
 
-      // Record in 1000ms slices (or 1500ms in low power mode to reduce chunking overhead)
       const sliceMs = this.lowPowerThrottled ? 1500 : 1000;
       this.mediaRecorder.start(sliceMs);
       this.isBuffering = true;
       this.stateChangeListeners.forEach((l) => l(true));
       soundEffects.playBufferStartSound();
 
-      // Buffer heartbeat timer for UI seconds counter
       this.bufferTimer = window.setInterval(() => {
         this.notifyBufferUpdate();
       }, 500);
@@ -692,31 +932,28 @@ class ReplayBufferEngine {
       return true;
     } catch (err) {
       console.error('Failed to start replay buffer:', err);
-      this.stopBuffer();
+      this.stopBuffer(false);
       throw err;
     }
   }
 
-  // Prune chunks that are older than maxBufferSeconds AND protect low-RAM (2GB-4GB) devices from Out-Of-Memory
   private pruneBuffer() {
     if (this.chunks.length <= 1) return;
     const now = Date.now();
     const cutoff = now - this.maxBufferSeconds * 1000;
 
-    // Filter out chunks before cutoff, keep at least the most recent chunks
     this.chunks = this.chunks.filter((chunk) => chunk.timestamp >= cutoff);
 
-    // Hardware RAM safety ceiling based on navigator.deviceMemory (defaults to 4GB if unreported)
     const deviceRamGb =
       typeof navigator !== 'undefined' && 'deviceMemory' in navigator
         ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory) || 4
         : 4;
     const maxSafeBufferBytes =
       deviceRamGb <= 2
-        ? 60 * 1024 * 1024 // 60 MB ceiling on 2GB RAM phones
+        ? 60 * 1024 * 1024
         : deviceRamGb <= 4
-        ? 140 * 1024 * 1024 // 140 MB ceiling on 4GB RAM phones
-        : 320 * 1024 * 1024; // 320 MB ceiling on 6GB+ RAM phones
+        ? 140 * 1024 * 1024
+        : 320 * 1024 * 1024;
 
     let totalBytes = 0;
     for (let i = 0; i < this.chunks.length; i++) {
@@ -732,12 +969,12 @@ class ReplayBufferEngine {
 
   private notifyBufferUpdate() {
     const bufferedSecs = this.getBufferedSeconds();
-    const total = this.chunks.length;
+    const total = this.isNativeApkMode ? bufferedSecs : this.chunks.length;
     this.bufferUpdateListeners.forEach((listener) => listener(bufferedSecs, total));
   }
 
   // Stop buffer
-  stopBuffer() {
+  stopBuffer(stopNativeService: boolean = true) {
     if (this.bufferTimer) {
       clearInterval(this.bufferTimer);
       this.bufferTimer = null;
@@ -747,6 +984,18 @@ class ReplayBufferEngine {
       clearInterval(this.compositorTimer);
       this.compositorTimer = null;
     }
+
+    if (this.mobileFallbackTimer) {
+      clearInterval(this.mobileFallbackTimer);
+      this.mobileFallbackTimer = null;
+    }
+    this.mobileFallbackCanvas = null;
+
+    if (this.isNativeApkMode && stopNativeService) {
+      nativeAndroidBridge.stopNativeReplayBuffer();
+    }
+    this.isNativeApkMode = false;
+    this.nativeBufferStartTime = 0;
 
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try {
@@ -780,7 +1029,6 @@ class ReplayBufferEngine {
     this.notifyBufferUpdate();
   }
 
-  // Generate a thumbnail frame from the live video stream (respecting Hide Logo in recorded video)
   private captureThumbnail(): string {
     try {
       if (!this.previewVideo || this.previewVideo.videoWidth === 0) {
@@ -807,7 +1055,6 @@ class ReplayBufferEngine {
     canvas.height = 270;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      // Sleek gaming gradient
       const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       grad.addColorStop(0, '#0f172a');
       grad.addColorStop(1, '#e11d48');
@@ -828,12 +1075,83 @@ class ReplayBufferEngine {
     return canvas.toDataURL('image/jpeg', 0.85);
   }
 
+  // Convert a NativeSavedClipPayload from ScreenRecordService into a SavedHighlight in IndexedDB
+  private async importNativeSavedClipPayload(
+    payload: NativeSavedClipPayload,
+    customTitle?: string,
+    fallbackGameTag: string = 'Mobile Game'
+  ): Promise<SavedHighlight | null> {
+    if (!payload.success || !payload.filePath) {
+      return null;
+    }
+
+    const fileSize = payload.fileSizeBytes || 0;
+    const videoBlob = await nativeAndroidBridge.readNativeFileToBlob(
+      payload.filePath,
+      fileSize,
+      'video/mp4'
+    );
+
+    const durationSec = Math.max(1, payload.durationSeconds || 15);
+    const gameTag = payload.gameName || fallbackGameTag;
+    const id = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const defaultTitle = customTitle || `${gameTag} Highlight (${durationSec}s)`;
+    const thumbnailUrl =
+      payload.thumbnailDataUrl && payload.thumbnailDataUrl.startsWith('data:image')
+        ? payload.thumbnailDataUrl
+        : this.createFallbackThumbnail();
+
+    const effRes = (payload.resolution as ResolutionOption) || this.getEffectiveResolution();
+    const effFps = (payload.fps as FpsOption) || this.getEffectiveFps();
+    const resConfig = this.getResolutionConfig(effRes);
+    const watermarkHidden = !this.shouldShowLogoInRecordedVideo();
+
+    const clipData: Omit<SavedHighlight, 'videoUrl'> = {
+      id,
+      title: defaultTitle,
+      blob: videoBlob,
+      thumbnailUrl,
+      durationSeconds: durationSec,
+      fileSizeBytes: videoBlob.size > 0 ? videoBlob.size : fileSize,
+      createdAt: Date.now(),
+      gameTag,
+      quality: `${resConfig.title} · ${effFps} FPS${this.lowPowerThrottled ? ' (Low Power)' : ''}`,
+      resolution: effRes,
+      fps: effFps,
+      audioMode: (payload.audioMode as AudioRecordingMode) || this.audioMode,
+      lowPowerSaved: this.lowPowerThrottled,
+      watermarkHidden,
+      logoConfig: { ...this.logoConfig },
+      markers: [...this.markers],
+    };
+
+    const saved = await indexedDbStorage.saveHighlight(clipData);
+    nativeAndroidBridge.registerClipFilePath(saved.id, payload.filePath);
+
+    // Reset native timer start for the next rolling segment
+    this.nativeBufferStartTime = Date.now();
+    this.markers = [];
+
+    soundEffects.playClipSavedSound();
+    this.highlightSavedListeners.forEach((listener) => listener(saved));
+    return saved;
+  }
+
   // Clip the last N seconds (e.g. 300s = 5 minutes, 60s, 30s)
   async clipHighlight(
     durationSeconds: number = 300,
     title?: string,
     gameTag: string = 'Cyber Strike'
   ): Promise<SavedHighlight | null> {
+    if (this.isNativeApkMode) {
+      const payload = await nativeAndroidBridge.requestSaveNativeClip(durationSeconds, gameTag);
+      if (!payload.success) {
+        console.warn('Native clip failed:', payload.error);
+        return null;
+      }
+      return await this.importNativeSavedClipPayload(payload, title, gameTag);
+    }
+
     if (this.chunks.length === 0) {
       console.warn('Cannot clip highlight: buffer is empty');
       return null;
@@ -842,12 +1160,10 @@ class ReplayBufferEngine {
     const now = Date.now();
     const clipCutoff = now - durationSeconds * 1000;
 
-    // Filter chunks within the requested retroactive window
     const targetChunks = this.chunks.filter((c) => c.timestamp >= clipCutoff);
 
     const blobsToMerge: Blob[] = [];
 
-    // Ensure container initialization segment is present
     if (this.headerChunk && (!targetChunks.length || targetChunks[0].blob !== this.headerChunk)) {
       blobsToMerge.push(this.headerChunk);
     }
@@ -872,7 +1188,6 @@ class ReplayBufferEngine {
     const id = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const defaultTitle = title || `${gameTag} Clutch Play (${calculatedDuration}s)`;
 
-    // Relevant markers within clip timeframe
     const relevantMarkers = this.markers.filter(
       (m) => m.timestamp >= this.getBufferedSeconds() - calculatedDuration
     );
@@ -902,10 +1217,7 @@ class ReplayBufferEngine {
 
     const saved = await indexedDbStorage.saveHighlight(clipData);
 
-    // Play celebration audio feedback
     soundEffects.playClipSavedSound();
-
-    // Broadcast event
     this.highlightSavedListeners.forEach((listener) => listener(saved));
 
     return saved;
