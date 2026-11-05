@@ -64,7 +64,7 @@ export const LegalSettingsFooter: React.FC = () => {
         </div>
 
         <div className="text-xs text-slate-400">
-          Created by <span className="text-white font-semibold">Aditya</span> &bull; v1.00.01
+          Created by <span className="text-white font-semibold">Aditya</span> &bull; v1.00.02
         </div>
       </div>
 

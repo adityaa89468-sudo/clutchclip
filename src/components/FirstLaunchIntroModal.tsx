@@ -75,7 +75,7 @@ export const FirstLaunchIntroModal: React.FC<FirstLaunchIntroModalProps> = ({ on
                   ClutchClip Studio
                 </h1>
                 <span className="text-[11px] font-mono-numbers text-rose-400 font-semibold">
-                  v1.00.01
+                  v1.00.02
                 </span>
               </div>
               <p className="text-xs text-slate-400">
