@@ -1,28 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Monitor,
   Maximize2,
   Minimize2,
   Square,
   Play,
-  Sparkles,
   Volume2,
   Mic,
-  MicOff,
-  Radio,
   Bookmark,
-  Zap,
-  CheckCircle2,
   HelpCircle,
-  Gamepad2,
   RefreshCw,
   Lock,
-  Crown,
-  Layers,
-  Gauge,
   Sliders,
-  Check,
-  Eye,
   EyeOff,
   Headphones
 } from 'lucide-react';
@@ -35,8 +23,7 @@ import {
   LowPowerPolicy,
   AudioRecordingMode,
   AUDIO_MODE_OPTIONS,
-  RESOLUTION_SLOTS,
-  FPS_SLOTS
+  RESOLUTION_SLOTS
 } from '../types/recorder';
 import { replayEngine } from '../services/replayBufferEngine';
 import { soundEffects } from '../services/soundEffects';
@@ -80,15 +67,13 @@ interface LiveScreenMonitorProps {
 
 const POPULAR_GAMES = [
   'Valorant',
-  'GTA V',
   'BGMI',
+  'GTA V',
   'Apex Legends',
   'CS2',
   'Fortnite',
   'Minecraft',
-  'Call of Duty',
-  'League of Legends',
-  'Roblox'
+  'Call of Duty'
 ];
 
 export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
@@ -121,8 +106,6 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
   batteryLevel = 80,
   lowPowerPolicy = 'auto',
   onSetLowPowerPolicy,
-  onToggleSimulateLowBattery,
-  isSimulatedLowBattery = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -133,7 +116,6 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
   const [hardwareSettings, setHardwareSettings] = useState<MediaTrackSettings | null>(null);
   const [showHudSlotPicker, setShowHudSlotPicker] = useState(false);
 
-  // Listen to game auto-detection events
   useEffect(() => {
     const unbind = replayEngine.onGameDetected((detection) => {
       setAutoDetectResult(detection);
@@ -153,7 +135,6 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
     }, 350);
   };
 
-  // Inspect live capture stream hardware resolution
   useEffect(() => {
     if (isBuffering) {
       const inspectTrack = () => {
@@ -171,7 +152,6 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
     }
   }, [isBuffering]);
 
-  // Bind live stream to video feed
   useEffect(() => {
     const stream = replayEngine.getLiveStream();
     if (videoRef.current && stream) {
@@ -180,7 +160,6 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
     }
   }, [isBuffering]);
 
-  // Format MM:SS
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -200,28 +179,26 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
     }
   };
 
-  // Handle slot resolution selection with tier validation
   const handleSelectResolution = (res: ResolutionOption) => {
     if (res === '1440p' && userTier === 'free') {
-      onRequirePremium('2K (1440p) Quad-HD Slot (Premium · ₹29)');
+      onRequirePremium('2K (1440p) Resolution (Premium · ₹29)');
       return;
     }
     if (res === '4k' && userTier !== 'ultra_4k') {
-      onRequirePremium('4K Ultra-HD 2160p Slot (Premium Plus · ₹99)');
+      onRequirePremium('4K Ultra-HD Resolution (Premium Plus · ₹99)');
       return;
     }
     onSetResolution(res);
     soundEffects.playMarkerDropSound();
   };
 
-  // Handle slot frame rate selection with tier validation
   const handleSelectFps = (newFps: FpsOption) => {
     if (newFps === 90 && userTier === 'free') {
-      onRequirePremium('90 FPS High-Refresh Slot (Premium · ₹29)');
+      onRequirePremium('90 FPS Capture (Premium · ₹29)');
       return;
     }
     if (newFps === 120 && userTier !== 'ultra_4k') {
-      onRequirePremium('120 FPS Ultra-Refresh Slot (Premium Plus · ₹99)');
+      onRequirePremium('120 FPS Capture (Premium Plus · ₹99)');
       return;
     }
     onSetFps(newFps);
@@ -231,73 +208,56 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
   const activeResKey = effectiveResolution || resolution;
   const activeFpsVal = effectiveFps || fps;
   const activeResSlot = RESOLUTION_SLOTS[activeResKey] || RESOLUTION_SLOTS['1080p'];
-  const activeFpsSlot = FPS_SLOTS[activeFpsVal] || FPS_SLOTS[60];
 
-  // Watermark logo parameters
   const shouldShowLogo = !isPremium || logoConfig.showLogo;
-  const sizeMap: Record<string, string> = {
-    small: 'w-7 h-7 text-[10px]',
-    medium: 'w-10 h-10 text-[12px]',
-    large: 'w-14 h-14 text-[14px]',
-  };
   const positionClasses: Record<string, string> = {
     'top-right': 'top-3 right-3',
     'top-left': 'top-3 left-3',
-    'bottom-right': 'bottom-16 right-3',
-    'bottom-left': 'bottom-16 left-3',
+    'bottom-right': 'bottom-14 right-3',
+    'bottom-left': 'bottom-14 left-3',
   };
 
   return (
     <div className="flex flex-col w-full max-w-3xl mx-auto space-y-5 select-none pb-8">
-      {/* If Not Buffering: Screen Capture Launchpad */}
       {!isBuffering ? (
-        <div className="space-y-4">
-          {/* Primary Launch Card */}
-          <div className="p-6 rounded-2xl bg-[#121620] border border-white/[0.07] space-y-5">
+        <div className="space-y-5">
+          {/* Card 1: Clean Launch Card */}
+          <div className="p-6 rounded-2xl bg-[#11151e] border border-white/[0.06] space-y-5">
             <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="text-xs font-medium text-rose-400">
-                  Continuous 5-Minute Replay Buffer
-                </div>
-                <h2 className="text-xl sm:text-2xl font-bold font-display text-white tracking-tight">
-                  Record Your Gameplay
+              <div className="space-y-1">
+                <h2 className="text-xl sm:text-2xl font-semibold font-display text-white tracking-tight">
+                  Screen &amp; Gameplay Recorder
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-xl">
-                  Keep a rolling 5-minute memory buffer of your screen or game window. When a highlight happens, save the clip retroactively.
+                  Keep a rolling 5-minute memory buffer of your screen. Save the last few minutes anytime after a highlight happens.
                 </p>
               </div>
 
               <button
+                type="button"
                 onClick={() => setShowHelpGuide(!showHelpGuide)}
-                className="p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
-                title="How screen capture works"
+                className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+                title="How it works"
               >
                 <HelpCircle className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Step instructions toggle */}
             {showHelpGuide && (
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-white/[0.06] space-y-2 text-xs text-slate-300">
-                <div className="font-semibold text-white">
-                  How to record your gameplay
-                </div>
+              <div className="p-4 rounded-xl bg-[#090b10] border border-white/[0.05] space-y-2 text-xs text-slate-300">
+                <div className="font-medium text-white">How to capture highlights</div>
                 <ol className="list-decimal list-inside space-y-1 text-slate-400">
-                  <li>Choose your preferred resolution, frame rate, and audio mode below.</li>
-                  <li>Click <strong className="text-slate-200">Start 5-Minute Replay Buffer</strong> and select your screen or game window.</li>
-                  <li>Enable system audio sharing when prompted to capture in-game sound.</li>
-                  <li>Play normally and press <strong className="text-slate-200">Clip 5m</strong> anytime to save the last 5 minutes.</li>
+                  <li>Select your preferred video quality and audio mode below.</li>
+                  <li>Tap <strong className="text-slate-200">Start 5-Minute Replay Buffer</strong> and allow screen capture.</li>
+                  <li>Play your game normally; press <strong className="text-slate-200">Clip 5m</strong> anytime to save the clip.</li>
                 </ol>
               </div>
             )}
 
-            {/* Game Title Selector with Auto-Detect */}
-            <div className="space-y-2.5 pt-1">
+            {/* Game Title Input */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <label className="font-medium text-slate-300 flex items-center gap-1.5">
-                  <Gamepad2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Active Game Title</span>
-                </label>
+                <label className="font-medium text-slate-300">Game or App Title</label>
                 {autoDetectResult?.detected && (
                   <span className="text-slate-400">
                     Detected: <strong className="text-slate-200">{autoDetectResult.gameName}</strong>
@@ -310,51 +270,52 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                   type="text"
                   value={currentGameName}
                   onChange={(e) => onChangeGameName(e.target.value)}
-                  placeholder="Enter or detect active game title..."
-                  className="w-full bg-[#0b0e14] border border-white/[0.08] rounded-xl pl-3.5 pr-24 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500/60 transition-colors"
+                  placeholder="Enter game title..."
+                  className="w-full bg-[#090b10] border border-white/[0.07] rounded-xl pl-3.5 pr-24 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/[0.2] transition-colors"
                 />
                 <button
                   type="button"
                   onClick={handleScanActiveGame}
                   disabled={isScanning}
-                  className="absolute right-1.5 py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Scan active window to detect game"
+                  className="absolute right-1.5 py-1.5 px-3 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <RefreshCw className={`w-3 h-3 text-rose-400 ${isScanning ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3 h-3 text-slate-400 ${isScanning ? 'animate-spin' : ''}`} />
                   <span>{isScanning ? 'Scanning' : 'Detect'}</span>
                 </button>
               </div>
 
-              {/* Quick Game Presets */}
               <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {POPULAR_GAMES.map((game) => (
-                  <button
-                    key={game}
-                    type="button"
-                    onClick={() => onChangeGameName(game)}
-                    className={`py-1 px-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                      currentGameName.toLowerCase() === game.toLowerCase()
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    {game}
-                  </button>
-                ))}
+                {POPULAR_GAMES.map((game) => {
+                  const active = currentGameName.toLowerCase() === game.toLowerCase();
+                  return (
+                    <button
+                      key={game}
+                      type="button"
+                      onClick={() => onChangeGameName(game)}
+                      className={`py-1 px-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                        active
+                          ? 'bg-white/[0.12] text-white'
+                          : 'bg-white/[0.02] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      {game}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Primary CTA Button */}
-            <div className="pt-2 space-y-2.5">
+            {/* Primary Start Button */}
+            <div className="pt-1 space-y-2.5">
               <button
+                type="button"
                 onClick={onToggleBuffer}
-                className="w-full py-3.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-semibold text-sm shadow-lg shadow-rose-950/30 flex items-center justify-center gap-2 transition-colors active:scale-[0.99] cursor-pointer"
+                className="w-full py-3.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99] cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-white" />
                 <span>Start 5-Minute Replay Buffer</span>
               </button>
 
-              {/* Clean Unboxed Summary Line */}
               <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-400 font-mono-numbers">
                 <span className="text-slate-300">{activeResSlot.name}</span>
                 <span aria-hidden="true">·</span>
@@ -366,44 +327,43 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                 {isLowPowerActive && (
                   <>
                     <span aria-hidden="true">·</span>
-                    <span className="text-amber-400">Eco Mode (-{powerSavingsPercent}%)</span>
+                    <span className="text-amber-400">Eco (-{powerSavingsPercent}%)</span>
                   </>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Non-intrusive inline Ad slot in the empty space between Primary Launch Card and Studio Configuration Card (Free Tier Only) */}
+          {/* Inline Ad Slot in empty space between cards (Free Tier Only) */}
           <AdMobBannerBar
             isPremium={isPremium}
             onOpenPremium={() => onRequirePremium('Ad-Free Experience (Premium · ₹29)')}
             variant="compact"
           />
 
-          {/* Studio Configuration Card (Single-level container with clean hairline dividers) */}
-          <div className="rounded-2xl bg-[#121620] border border-white/[0.07] divide-y divide-white/[0.06]">
-            {/* Section 1: Resolution & Frame Rate */}
+          {/* Card 2: Clean Preferences Container */}
+          <div className="rounded-2xl bg-[#11151e] border border-white/[0.06] divide-y divide-white/[0.05]">
+            {/* Video Quality & Frame Rate */}
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs sm:text-sm font-semibold text-white">Video Quality &amp; Frame Rate</h3>
+                  <h3 className="text-sm font-semibold text-white">Video Quality</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {activeResSlot.width} × {activeResSlot.height} · {Math.round(activeResSlot.baseBitrate / 1_000_000 * (activeFpsVal / 60) * (isLowPowerActive ? 0.55 : 1))} Mbps · {activeResSlot.storagePerMinute}
+                    {activeResSlot.width} × {activeResSlot.height} · {activeResSlot.storagePerMinute}
                   </p>
                 </div>
                 <span className="text-xs font-mono-numbers text-slate-400">
-                  {activeResSlot.shortLabel} / {activeFpsVal} FPS
+                  {activeResSlot.shortLabel} · {activeFpsVal} FPS
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Resolution Segmented Bar */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span>Resolution</span>
                     <span className="text-[11px] text-slate-500">Free up to 1080p</span>
                   </div>
-                  <div className="grid grid-cols-5 gap-1 p-1 bg-[#0b0e14] rounded-xl border border-white/[0.06]">
+                  <div className="grid grid-cols-5 gap-1 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
                     {(['480p', '720p', '1080p', '1440p', '4k'] as ResolutionOption[]).map((resKey) => {
                       const slot = RESOLUTION_SLOTS[resKey];
                       const isSelected = resolution === resKey;
@@ -416,31 +376,28 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                           key={resKey}
                           type="button"
                           onClick={() => handleSelectResolution(resKey)}
-                          className={`py-2 px-1 rounded-lg transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer whitespace-nowrap ${
+                          className={`py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-0.5 cursor-pointer whitespace-nowrap ${
                             isSelected
                               ? 'bg-rose-600 text-white font-semibold'
                               : isLocked
-                              ? 'text-slate-500 hover:text-amber-300'
-                              : 'text-slate-300 hover:text-white hover:bg-white/[0.04]'
+                              ? 'text-slate-500 hover:text-slate-300'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-xs font-mono-numbers">{slot.shortLabel}</span>
-                            {isLocked && <Lock className="w-2.5 h-2.5 text-amber-400/80" />}
-                          </div>
+                          <span className="text-xs font-mono-numbers">{slot.shortLabel}</span>
+                          {isLocked && <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Frame Rate Segmented Bar */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span>Frame Rate</span>
                     <span className="text-[11px] text-slate-500">Free up to 60 FPS</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-1 p-1 bg-[#0b0e14] rounded-xl border border-white/[0.06]">
+                  <div className="grid grid-cols-4 gap-1 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
                     {([30, 60, 90, 120] as FpsOption[]).map((fVal) => {
                       const isSelected = fps === fVal;
                       const isLocked =
@@ -456,12 +413,12 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                             isSelected
                               ? 'bg-rose-600 text-white font-semibold'
                               : isLocked
-                              ? 'text-slate-500 hover:text-amber-300'
-                              : 'text-slate-300 hover:text-white hover:bg-white/[0.04]'
+                              ? 'text-slate-500 hover:text-slate-300'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
                           <span className="font-mono-numbers">{fVal}</span>
-                          {isLocked && <Lock className="w-2.5 h-2.5 text-amber-400/80 shrink-0" />}
+                          {isLocked && <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />}
                         </button>
                       );
                     })}
@@ -470,11 +427,11 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               </div>
             </div>
 
-            {/* Section 2: Audio Recording Source */}
+            {/* Audio Recording Source */}
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs sm:text-sm font-semibold text-white">Audio Recording</h3>
+                  <h3 className="text-sm font-semibold text-white">Audio Source</h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {AUDIO_MODE_OPTIONS[audioMode].description}
                   </p>
@@ -484,10 +441,10 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0b0e14] rounded-xl border border-white/[0.06]">
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
                 {(
                   [
-                    { id: 'game_only' as AudioRecordingMode, label: 'Game Audio Only', icon: Volume2 },
+                    { id: 'game_only' as AudioRecordingMode, label: 'Game Audio', icon: Volume2 },
                     { id: 'mic_only' as AudioRecordingMode, label: 'Mic Only', icon: Mic },
                     { id: 'game_and_mic' as AudioRecordingMode, label: 'Game + Mic', icon: Headphones },
                   ]
@@ -505,10 +462,10 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                           onToggleMic();
                         }
                       }}
-                      className={`py-2.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`py-2 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
                         isSelected
                           ? 'bg-rose-600 text-white font-semibold'
-                          : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                          : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <IconComp className="w-3.5 h-3.5 shrink-0" />
@@ -519,21 +476,13 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               </div>
             </div>
 
-            {/* Section 3: Watermark & Low Power Controls */}
+            {/* Watermark & Battery Row */}
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Hide Logo in Recorded Video */}
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <span>Recorded Video Logo</span>
-                    {!isPremium && <span className="text-[11px] font-normal text-amber-400">· Premium</span>}
-                  </div>
+                  <div className="text-xs font-semibold text-white">Video Watermark</div>
                   <div className="text-xs text-slate-400 truncate mt-0.5">
-                    {!isPremium
-                      ? 'Keep on screen, hide in saved video'
-                      : !shouldShowLogo
-                      ? 'Shown on screen · Hidden in video'
-                      : 'Visible on screen & recorded video'}
+                    {!shouldShowLogo ? 'Hidden in saved clips' : 'Shown on saved clips'}
                   </div>
                 </div>
 
@@ -541,7 +490,7 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                   type="button"
                   onClick={() => {
                     if (!isPremium) {
-                      onRequirePremium('Remove Watermark / Hide Logo (Subscribed Users Only)');
+                      onRequirePremium('Hide Watermark in Video (Premium · ₹29)');
                       return;
                     }
                     onChangeLogoConfig?.({
@@ -549,96 +498,64 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
                       showLogo: !shouldShowLogo,
                     });
                   }}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer whitespace-nowrap ${
-                    !shouldShowLogo
-                      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-white/[0.05] text-slate-200 hover:bg-white/[0.1] border border-white/[0.08]'
-                  }`}
+                  className="py-1.5 px-3 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-slate-200 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer whitespace-nowrap"
                 >
                   {!shouldShowLogo ? (
                     <>
-                      <EyeOff className="w-3.5 h-3.5" />
-                      <span>Hidden in Video</span>
-                    </>
-                  ) : !isPremium ? (
-                    <>
-                      <Lock className="w-3 h-3 text-amber-400" />
-                      <span>Hide Logo</span>
+                      <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Hidden</span>
                     </>
                   ) : (
                     <>
-                      <EyeOff className="w-3.5 h-3.5" />
+                      {!isPremium && <Lock className="w-3 h-3 text-slate-400" />}
                       <span>Hide Logo</span>
                     </>
                   )}
                 </button>
               </div>
 
-              {/* Low Power Mode Quick Toggle */}
-              <div className="flex items-center justify-between gap-3 sm:border-l sm:border-white/[0.06] sm:pl-4">
+              <div className="flex items-center justify-between gap-3 sm:border-l sm:border-white/[0.05] sm:pl-4">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-white">Low Power Mode</div>
+                  <div className="text-xs font-semibold text-white">Power Saver</div>
                   <div className="text-xs text-slate-400 truncate mt-0.5 font-mono-numbers">
                     {isLowPowerActive
-                      ? `Eco ${activeResSlot.shortLabel} @ ${activeFpsVal} FPS (${batteryLevel}%)`
-                      : `Auto ≤20% (${batteryLevel}% battery)`}
+                      ? `Eco 30 FPS (${batteryLevel}%)`
+                      : `Auto ≤20% (${batteryLevel}%)`}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {onToggleSimulateLowBattery && (
-                    <button
-                      type="button"
-                      onClick={onToggleSimulateLowBattery}
-                      className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
-                        isSimulatedLowBattery
-                          ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                          : 'bg-white/[0.03] border-white/[0.08] text-slate-400 hover:text-white'
-                      }`}
-                      title="Simulate low battery state (14%)"
-                    >
-                      {isSimulatedLowBattery ? '14% Sim' : 'Test Low'}
-                    </button>
-                  )}
-                  {onSetLowPowerPolicy && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSetLowPowerPolicy(
-                          lowPowerPolicy === 'always_on'
-                            ? 'auto'
-                            : lowPowerPolicy === 'auto'
-                            ? 'off'
-                            : 'always_on'
-                        )
-                      }
-                      className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
-                        isLowPowerActive
-                          ? 'bg-amber-500 text-slate-950 font-semibold'
-                          : 'bg-white/[0.05] text-slate-300 hover:bg-white/[0.1] border border-white/[0.08]'
-                      }`}
-                    >
-                      {lowPowerPolicy === 'always_on'
-                        ? 'Eco On'
-                        : lowPowerPolicy === 'auto'
-                        ? 'Auto'
-                        : 'Off'}
-                    </button>
-                  )}
-                </div>
+                {onSetLowPowerPolicy && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSetLowPowerPolicy(
+                        lowPowerPolicy === 'always_on'
+                          ? 'auto'
+                          : lowPowerPolicy === 'auto'
+                          ? 'off'
+                          : 'always_on'
+                      )
+                    }
+                    className="py-1.5 px-3 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-slate-200 shrink-0 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    {lowPowerPolicy === 'always_on'
+                      ? 'Always Eco'
+                      : lowPowerPolicy === 'auto'
+                      ? 'Auto'
+                      : 'Off'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* If Buffering: Live Screen Monitor & Real-Time Highlight Deck */
+        /* Active Buffering Monitor */
         <div className="space-y-4">
-          {/* Live Video Monitor Frame */}
           <div
             ref={containerRef}
-            className="relative w-full aspect-[16/9] rounded-3xl overflow-hidden bg-black border border-slate-800 shadow-2xl group"
+            className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden bg-black border border-white/[0.07]"
           >
-            {/* Live Video Element */}
             <video
               ref={videoRef}
               autoPlay
@@ -647,57 +564,39 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               className="w-full h-full object-contain bg-black"
             />
 
-            {/* Top HUD Overlay */}
-            <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/85 via-black/50 to-transparent flex items-center justify-between pointer-events-auto">
+            {/* Clean Top HUD */}
+            <div className="absolute top-0 left-0 right-0 p-3.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <div className="flex items-center gap-1.5 bg-slate-900/90 py-0.5 px-2 rounded-lg border border-slate-700/60 text-xs font-bold text-white font-display">
-                  <span className="text-rose-400">REC</span>
-                  <span>{currentGameName || 'Game Screen'}</span>
+                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md py-1 px-2.5 rounded-lg border border-white/10 text-xs font-medium text-white">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  <span>{currentGameName || 'Screen'}</span>
+                  <span className="text-slate-500">·</span>
                   <button
-                    onClick={handleScanActiveGame}
-                    disabled={isScanning}
-                    className="p-0.5 text-slate-400 hover:text-white transition-colors ml-0.5"
-                    title="Rescan active game"
+                    type="button"
+                    onClick={() => setShowHudSlotPicker(!showHudSlotPicker)}
+                    className="font-mono-numbers text-slate-300 hover:text-white flex items-center gap-1 cursor-pointer"
                   >
-                    <RefreshCw className={`w-3 h-3 text-rose-400 ${isScanning ? 'animate-spin' : ''}`} />
+                    <span>{activeResSlot.shortLabel}</span>
+                    <span>{activeFpsVal}fps</span>
+                    <Sliders className="w-3 h-3 text-slate-400 ml-0.5" />
                   </button>
                 </div>
-
-                {/* Interactive Slot Badge on Recording HUD */}
-                <button
-                  type="button"
-                  onClick={() => setShowHudSlotPicker(!showHudSlotPicker)}
-                  className="px-2 py-0.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-[10px] font-mono-numbers font-semibold text-slate-200 border border-slate-700/60 flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Click to switch resolution slot"
-                >
-                  <span className={isLowPowerActive ? 'text-amber-400 font-bold' : 'text-rose-400 font-bold'}>
-                    {activeResSlot.shortLabel}
-                  </span>
-                  <span>·</span>
-                  <span>{activeFpsVal}FPS</span>
-                  {isLowPowerActive && (
-                    <span className="px-1 rounded bg-amber-500/20 text-amber-300 text-[8px] font-bold">
-                      ECO
-                    </span>
-                  )}
-                  <Sliders className="w-2.5 h-2.5 text-slate-400 ml-0.5" />
-                </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={toggleFullscreen}
-                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors"
-                  title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Feed'}
+                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors cursor-pointer"
+                  title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
                 >
                   {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                 </button>
 
                 <button
+                  type="button"
                   onClick={onToggleBuffer}
-                  className="py-1 px-2.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1 transition-colors"
-                  title="Stop recording buffer"
+                  className="py-1 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Square className="w-3 h-3 fill-white" />
                   <span>Stop</span>
@@ -705,261 +604,167 @@ export const LiveScreenMonitor: React.FC<LiveScreenMonitorProps> = ({
               </div>
             </div>
 
-            {/* Quick Slot Selector Popover inside Recording HUD */}
             {showHudSlotPicker && (
-              <div className="absolute top-12 left-3 z-30 p-3 bg-slate-950/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-md space-y-2.5 max-w-xs animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-white uppercase tracking-wider">
-                    Quick Slot Switch
-                  </span>
-                  <button
-                    onClick={() => setShowHudSlotPicker(false)}
-                    className="text-[10px] text-slate-400 hover:text-white"
-                  >
-                    Close
-                  </button>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[10px] text-slate-400">Resolution Slots:</span>
-                  <div className="grid grid-cols-5 gap-1">
-                    {(['480p', '720p', '1080p', '1440p', '4k'] as ResolutionOption[]).map((rKey) => {
-                      const isLocked =
-                        (rKey === '1440p' && userTier === 'free') ||
-                        (rKey === '4k' && userTier !== 'ultra_4k');
-                      return (
-                        <button
-                          key={rKey}
-                          onClick={() => {
-                            handleSelectResolution(rKey);
-                            setShowHudSlotPicker(false);
-                          }}
-                          className={`py-1 text-[10px] font-bold rounded flex items-center justify-center gap-0.5 ${
-                            resolution === rKey
-                              ? 'bg-rose-600 text-white'
-                              : isLocked
-                              ? 'bg-slate-900 text-slate-500'
-                              : 'bg-slate-900 text-slate-300 hover:text-white'
-                          }`}
-                        >
-                          <span>{RESOLUTION_SLOTS[rKey].shortLabel}</span>
-                          {isLocked && <Lock className="w-2 h-2 text-amber-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[10px] text-slate-400">FPS Slots:</span>
-                  <div className="grid grid-cols-4 gap-1">
-                    {([30, 60, 90, 120] as FpsOption[]).map((f) => {
-                      const isLocked =
-                        (f === 90 && userTier === 'free') ||
-                        (f === 120 && userTier !== 'ultra_4k');
-                      return (
-                        <button
-                          key={f}
-                          onClick={() => {
-                            handleSelectFps(f);
-                            setShowHudSlotPicker(false);
-                          }}
-                          className={`py-1 text-[10px] font-bold rounded flex items-center justify-center gap-0.5 ${
-                            fps === f
-                              ? 'bg-rose-600 text-white'
-                              : isLocked
-                              ? 'bg-slate-900 text-slate-500'
-                              : 'bg-slate-900 text-slate-300 hover:text-white'
-                          }`}
-                        >
-                          <span>{f}</span>
-                          {isLocked && <Lock className="w-2 h-2 text-amber-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Quick Audio Source Switcher in HUD */}
-                <div className="space-y-1 pt-1 border-t border-slate-800">
-                  <span className="text-[10px] text-slate-400">Audio Recording:</span>
-                  <div className="grid grid-cols-3 gap-1">
-                    {(
-                      [
-                        { id: 'game_only' as AudioRecordingMode, label: 'Game Only' },
-                        { id: 'mic_only' as AudioRecordingMode, label: 'Mic Only' },
-                        { id: 'game_and_mic' as AudioRecordingMode, label: 'Game + Mic' },
-                      ]
-                    ).map((aOpt) => (
-                      <button
-                        key={aOpt.id}
-                        type="button"
-                        onClick={() => {
-                          onSetAudioMode?.(aOpt.id);
-                        }}
-                        className={`py-1 px-1 text-[9px] font-bold rounded transition-colors ${
-                          audioMode === aOpt.id
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-slate-900 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        {aOpt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quick Watermark Hide Toggle in HUD (Subscribed Only) */}
-                <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-400">Recorded Video Logo:</span>
+              <div className="absolute top-13 left-3.5 z-30 p-3.5 bg-[#11151e]/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-md space-y-2.5 w-64">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-white">Capture Quality</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!isPremium) {
-                        setShowHudSlotPicker(false);
-                        onRequirePremium('Remove Watermark / Hide Logo (Subscribed Users Only)');
-                        return;
-                      }
-                      onChangeLogoConfig?.({
-                        ...logoConfig,
-                        showLogo: !shouldShowLogo,
-                      });
-                    }}
-                    className={`py-1 px-2 rounded text-[10px] font-bold flex items-center gap-1 ${
-                      !shouldShowLogo
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : !isPremium
-                        ? 'bg-amber-400/20 text-amber-300'
-                        : 'bg-slate-900 text-slate-200 hover:text-white'
-                    }`}
+                    onClick={() => setShowHudSlotPicker(false)}
+                    className="text-slate-400 hover:text-white"
                   >
-                    {!shouldShowLogo ? (
-                      <>
-                        <EyeOff className="w-2.5 h-2.5" />
-                        <span>Hidden in Video</span>
-                      </>
-                    ) : (
-                      <>
-                        {!isPremium && <Lock className="w-2.5 h-2.5 text-amber-400" />}
-                        <span>Hide in Video</span>
-                      </>
-                    )}
+                    Done
                   </button>
+                </div>
+
+                <div className="grid grid-cols-5 gap-1">
+                  {(['480p', '720p', '1080p', '1440p', '4k'] as ResolutionOption[]).map((rKey) => {
+                    const isLocked =
+                      (rKey === '1440p' && userTier === 'free') ||
+                      (rKey === '4k' && userTier !== 'ultra_4k');
+                    return (
+                      <button
+                        key={rKey}
+                        type="button"
+                        onClick={() => {
+                          handleSelectResolution(rKey);
+                          setShowHudSlotPicker(false);
+                        }}
+                        className={`py-1.5 text-[11px] font-mono-numbers rounded-lg flex items-center justify-center ${
+                          resolution === rKey
+                            ? 'bg-rose-600 text-white font-semibold'
+                            : 'bg-white/[0.04] text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <span>{RESOLUTION_SLOTS[rKey].shortLabel}</span>
+                        {isLocked && <Lock className="w-2.5 h-2.5 ml-0.5 text-slate-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-4 gap-1">
+                  {([30, 60, 90, 120] as FpsOption[]).map((f) => {
+                    const isLocked =
+                      (f === 90 && userTier === 'free') ||
+                      (f === 120 && userTier !== 'ultra_4k');
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => {
+                          handleSelectFps(f);
+                          setShowHudSlotPicker(false);
+                        }}
+                        className={`py-1.5 text-[11px] font-mono-numbers rounded-lg flex items-center justify-center ${
+                          fps === f
+                            ? 'bg-rose-600 text-white font-semibold'
+                            : 'bg-white/[0.04] text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <span>{f}fps</span>
+                        {isLocked && <Lock className="w-2.5 h-2.5 ml-0.5 text-slate-500" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* On-Screen Logo Overlay (ALWAYS visible on the screen even when hidden in recorded video) */}
+            {/* On-Screen Logo */}
             <div
               className={`absolute transition-all duration-150 pointer-events-none flex flex-col items-end gap-1 ${
                 positionClasses[logoConfig.position] || 'top-3 right-3'
               }`}
             >
               <AppLogo
-                size={logoConfig.size === 'small' ? 28 : logoConfig.size === 'medium' ? 40 : 56}
+                size={logoConfig.size === 'small' ? 28 : logoConfig.size === 'medium' ? 38 : 52}
                 variant={logoConfig.variant || 'main'}
                 customLogoUrl={logoConfig.customLogoUrl}
               />
-              {!shouldShowLogo && (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/40 text-[8px] font-mono-numbers font-bold text-emerald-300 shadow">
-                  Hidden in Video
-                </span>
-              )}
             </div>
 
-            {/* Hardware Resolution & Capture Stream Info Pill */}
             {hardwareSettings && (
-              <div className="absolute top-12 right-3 pointer-events-none py-0.5 px-2 rounded-md bg-black/60 backdrop-blur-sm border border-white/10 text-[9px] font-mono-numbers text-slate-300 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span>
-                  Hardware: {hardwareSettings.width || activeResSlot.width}×{hardwareSettings.height || activeResSlot.height} @ {Math.round(hardwareSettings.frameRate || fps)}fps
-                </span>
+              <div className="absolute bottom-11 right-3.5 pointer-events-none text-[10px] font-mono-numbers text-slate-400">
+                {hardwareSettings.width || activeResSlot.width}×{hardwareSettings.height || activeResSlot.height}
               </div>
             )}
 
-            {/* Bottom Floating Timeline Overlay */}
-            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between text-xs font-mono-numbers text-white">
-              <div className="flex items-center gap-2">
-                <Radio className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-                <span className="font-bold">{formatTime(bufferedSeconds)}</span>
+            {/* Bottom Progress Bar */}
+            <div className="absolute bottom-0 left-0 right-0 p-3.5 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex items-center justify-between text-xs font-mono-numbers text-white">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold">{formatTime(bufferedSeconds)}</span>
                 <span className="text-slate-400">/ {formatTime(maxBufferSeconds)}</span>
               </div>
-              <div className="w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-36 h-1.5 bg-white/15 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-rose-600 to-amber-500 transition-all duration-300"
+                  className="h-full bg-rose-500 transition-all duration-300"
                   style={{ width: `${bufferPercent}%` }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Retroactive Highlight Capture Controls */}
-          <div className="p-4 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-rose-400" />
-                <span>Instant Highlight Triggers</span>
-              </div>
-              <span className="text-[11px] font-mono-numbers text-slate-400">
-                {bufferedSeconds}s in memory ({activeResSlot.shortLabel} · {fps}FPS)
+          {/* Clean Clip Trigger Card */}
+          <div className="p-5 rounded-2xl bg-[#11151e] border border-white/[0.06] space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-white">Save Retroactive Clip</span>
+              <span className="font-mono-numbers text-slate-400">
+                {bufferedSeconds}s buffered
               </span>
             </div>
 
-            {/* Hero Action: Clip Last 5 Minutes */}
             <button
-              disabled={bufferedSeconds < 10 || isSaving}
+              type="button"
+              disabled={bufferedSeconds < 1 || isSaving}
               onClick={() => onClip(maxBufferSeconds)}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-display font-bold text-sm shadow-lg shadow-rose-950/40 flex items-center justify-between transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-semibold text-sm flex items-center justify-between transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                <span>Clip Last 5 Minutes (Full Buffer)</span>
-              </div>
-              <span className="text-xs font-mono-numbers px-2 py-0.5 rounded bg-black/30">
+              <span>Save Last 5 Minutes</span>
+              <span className="text-xs font-mono-numbers text-rose-100">
                 {formatTime(Math.min(bufferedSeconds, maxBufferSeconds))}
               </span>
             </button>
 
-            {/* Quick Slices & Marker */}
-            <div className="grid grid-cols-4 gap-2 pt-1">
+            <div className="grid grid-cols-4 gap-2">
               <button
-                disabled={bufferedSeconds < 5 || isSaving}
+                type="button"
+                disabled={bufferedSeconds < 1 || isSaving}
                 onClick={() => onClip(30)}
-                className="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold font-mono-numbers flex flex-col items-center justify-center gap-0.5 disabled:opacity-40 transition-colors"
+                className="py-2.5 px-2 rounded-xl bg-[#090b10] hover:bg-white/[0.04] border border-white/[0.06] text-white text-xs font-mono-numbers font-medium disabled:opacity-40 transition-colors cursor-pointer"
               >
-                <span>30s</span>
-                <span className="text-[9px] text-slate-400 font-sans">Quick Cut</span>
+                30s
               </button>
 
               <button
-                disabled={bufferedSeconds < 10 || isSaving}
+                type="button"
+                disabled={bufferedSeconds < 1 || isSaving}
                 onClick={() => onClip(60)}
-                className="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold font-mono-numbers flex flex-col items-center justify-center gap-0.5 disabled:opacity-40 transition-colors"
+                className="py-2.5 px-2 rounded-xl bg-[#090b10] hover:bg-white/[0.04] border border-white/[0.06] text-white text-xs font-mono-numbers font-medium disabled:opacity-40 transition-colors cursor-pointer"
               >
-                <span>60s</span>
-                <span className="text-[9px] text-slate-400 font-sans">1 Minute</span>
+                60s
               </button>
 
               <button
-                disabled={bufferedSeconds < 30 || isSaving}
+                type="button"
+                disabled={bufferedSeconds < 1 || isSaving}
                 onClick={() => onClip(120)}
-                className="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold font-mono-numbers flex flex-col items-center justify-center gap-0.5 disabled:opacity-40 transition-colors"
+                className="py-2.5 px-2 rounded-xl bg-[#090b10] hover:bg-white/[0.04] border border-white/[0.06] text-white text-xs font-mono-numbers font-medium disabled:opacity-40 transition-colors cursor-pointer"
               >
-                <span>2 min</span>
-                <span className="text-[9px] text-slate-400 font-sans">Round</span>
+                2m
               </button>
 
               <button
-                onClick={() => onAddMarker('Clutch Moment')}
-                className="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold flex flex-col items-center justify-center gap-0.5 transition-colors"
+                type="button"
+                onClick={() => onAddMarker('Highlight')}
+                className="py-2.5 px-2 rounded-xl bg-[#090b10] hover:bg-white/[0.04] border border-white/[0.06] text-slate-200 text-xs font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span className="text-[9px] text-amber-300 font-sans">Drop Pin</span>
+                <Bookmark className="w-3.5 h-3.5 text-rose-400" />
+                <span>Pin</span>
               </button>
             </div>
           </div>
 
-          {/* Non-intrusive inline Ad slot in the empty space below Instant Highlight Triggers (Free Tier Only) */}
           <AdMobBannerBar
             isPremium={isPremium}
             onOpenPremium={() => onRequirePremium('Ad-Free Experience (Premium · ₹29)')}

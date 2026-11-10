@@ -382,7 +382,9 @@ function sanitizeUserSubscriptionPayload(
     validTier === 'free'
       ? ''
       : receipt?.productId ||
-        (validTier === 'ultra_4k' ? 'clutchclip_ultra_4k_99_1m' : 'clutchclip_pro_2k_29_1m')
+        (validTier === 'ultra_4k'
+          ? 'clutchclip_ultra_4k_120fps_monthly'
+          : 'clutchclip_pro_2k_90fps_monthly')
   ).slice(0, MAX_PRODUCT_LEN);
   const amountPaid = (
     validTier === 'free'

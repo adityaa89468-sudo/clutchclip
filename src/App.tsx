@@ -270,9 +270,16 @@ export default function App() {
       setCurrentUser(user);
       if (!user) {
         setSubscriptionRecord(null);
-        setUserTier('free');
-        setTierExpiresAt(null);
-        setPlayReceipt(null);
+        const savedReceipt = googlePlayBilling.getSavedReceipt();
+        if (savedReceipt && localStorage.getItem('clutchclip_owner_explicit_free') !== 'true') {
+          setUserTier(savedReceipt.tier);
+          setTierExpiresAt(savedReceipt.expiresAt);
+          setPlayReceipt(savedReceipt);
+        } else {
+          setUserTier('free');
+          setTierExpiresAt(null);
+          setPlayReceipt(null);
+        }
         setIsAuthLoading(false);
         return;
       }
@@ -396,7 +403,7 @@ export default function App() {
           .then((rec) => setSubscriptionRecord(rec))
           .catch((e) => console.warn('Subscription update cached locally:', e));
       }
-      showToast('Switched to Free Tier (Watermark active)');
+      showToast('Subscription cancelled · Switched to Free Plan');
     } else if (tier === 'pro_2k') {
       localStorage.removeItem('clutchclip_owner_explicit_free');
       const expires = receipt?.expiresAt || Date.now() + ONE_MONTH_MS;
@@ -705,38 +712,31 @@ export default function App() {
       isLowPowerActive={isLowPowerActive}
     >
       {/* Top App Header */}
-      <header className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#0b0e14]/90 backdrop-blur-md sticky top-0 z-20 shrink-0">
+      <header className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#090b10]/90 backdrop-blur-md sticky top-0 z-20 shrink-0">
         {/* Main App Logo & Wordmark */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <AppLogo size={30} variant="main" customLogoUrl={logoConfig.customLogoUrl} />
-          <span className="text-base font-bold font-display tracking-tight text-white whitespace-nowrap">
+          <AppLogo size={28} variant="main" customLogoUrl={logoConfig.customLogoUrl} />
+          <span className="text-base font-semibold font-display tracking-tight text-white whitespace-nowrap">
             Clutch<span className="text-rose-500">Clip</span>
           </span>
         </div>
 
-        {/* Right: Recording Indicator & Quick Clip Action */}
+        {/* Right: Primary Quick Clip Action */}
         <div className="flex items-center gap-3 shrink-0">
-          {isBuffering && (
-            <div className="flex items-center gap-1.5 text-rose-400 font-mono-numbers text-xs whitespace-nowrap">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-              <span>REC 5M</span>
-            </div>
-          )}
           <button
             onClick={() => handleClip(maxBufferSeconds)}
             disabled={!isBuffering || bufferedSeconds < 1 || isSavingClip}
-            className="py-1.5 px-3.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold font-display transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
-            title="Clip Last 5 Minutes Highlight"
+            className="py-1.5 px-3.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-35 disabled:cursor-not-allowed text-white text-xs font-semibold font-display transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            title="Save Last 5 Minutes"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Clip 5m</span>
+            Clip 5m
           </button>
         </div>
       </header>
 
       {!isOnline && (
-        <div className="mx-5 mt-3 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs font-medium flex items-center gap-2">
-          <span>Offline Mode · Local 5-minute replay buffer and Vault remain active.</span>
+        <div className="mx-5 mt-3 px-3.5 py-2 rounded-xl bg-[#11151e] border border-white/[0.06] text-slate-300 text-xs flex items-center gap-2">
+          <span>Offline mode · Local replay buffer and saved clips remain active.</span>
         </div>
       )}
 
@@ -758,8 +758,7 @@ export default function App() {
         {/* Toast Banner */}
         {toastMessage && (
           <div className="fixed top-16 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-top-3 duration-150">
-            <div className="py-2 px-4 rounded-xl bg-[#121620]/95 border border-white/[0.1] text-white font-medium text-xs shadow-2xl backdrop-blur-md flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <div className="py-2 px-4 rounded-xl bg-[#11151e]/95 border border-white/[0.1] text-white font-medium text-xs shadow-2xl backdrop-blur-md">
               <span>{toastMessage}</span>
             </div>
           </div>
@@ -911,11 +910,9 @@ export default function App() {
         {/* Tab 4: Settings & Profile */}
         {activeTab === 'settings' && (
           <div className="space-y-5 w-full max-w-3xl mx-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold font-display text-white">Settings &amp; Profile</h2>
-                <p className="text-xs text-slate-400">Manage account, recording quality, audio, and watermark preferences</p>
-              </div>
+            <div>
+              <h2 className="text-lg font-semibold font-display text-white">Settings</h2>
+              <p className="text-xs text-slate-400">Account, video quality, audio, and storage preferences</p>
             </div>
 
             {/* Google Sign-In & User Profile Card */}
@@ -931,6 +928,7 @@ export default function App() {
               onSignOut={handleSignOut}
               onSyncSubscription={handleSyncSubscription}
               onOpenPremium={() => setActiveTab('premium')}
+              onCancelSubscription={() => handleUnlockTier('free', null, currentUser)}
             />
 
             {/* Inline Ad slot in the empty space between Profile Card and Video Quality Card */}
@@ -940,27 +938,27 @@ export default function App() {
               variant="compact"
             />
 
-            {/* Video Quality & Frame Rate Settings Card */}
-            <div className="p-5 rounded-2xl bg-[#121620] border border-white/[0.07] space-y-5">
+            {/* Video Quality & Audio Settings Card */}
+            <div className="rounded-2xl bg-[#11151e] border border-white/[0.06] divide-y divide-white/[0.05]">
               {/* Resolution Selection */}
-              <div className="space-y-3">
+              <div className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-white">Recording Resolution</div>
-                    <div className="text-xs text-slate-400">Free: 1080p · Premium: 2K (₹29) · Premium Plus: 4K (₹99)</div>
+                    <div className="text-sm font-semibold text-white">Video Resolution</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Free up to 1080p · 2K &amp; 4K with Premium</div>
                   </div>
-                  <span className="text-xs font-semibold font-mono-numbers text-rose-400">
+                  <span className="text-xs font-mono-numbers text-slate-400">
                     {resolution === '1440p' ? '2K QHD' : resolution.toUpperCase()}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-5 gap-1 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
                   {[
-                    { id: '480p' as ResolutionOption, label: '480p SD', spec: '854 × 480 · Low Storage', tierReq: 'free' },
-                    { id: '720p' as ResolutionOption, label: '720p HD', spec: '1280 × 720 · Standard HD', tierReq: 'free' },
-                    { id: '1080p' as ResolutionOption, label: '1080p FHD', spec: '1920 × 1080 · Full HD (Free)', tierReq: 'free' },
-                    { id: '1440p' as ResolutionOption, label: '1440p 2K QHD', spec: '2560 × 1440 · Premium (₹29)', tierReq: 'pro_2k' },
-                    { id: '4k' as ResolutionOption, label: '4K UHD', spec: '3840 × 2160 · Premium Plus (₹99)', tierReq: 'ultra_4k' },
+                    { id: '480p' as ResolutionOption, label: '480p', tierReq: 'free' },
+                    { id: '720p' as ResolutionOption, label: '720p', tierReq: 'free' },
+                    { id: '1080p' as ResolutionOption, label: '1080p', tierReq: 'free' },
+                    { id: '1440p' as ResolutionOption, label: '2K', tierReq: 'pro_2k' },
+                    { id: '4k' as ResolutionOption, label: '4K', tierReq: 'ultra_4k' },
                   ].map((item) => {
                     const isLocked =
                       (item.tierReq === 'pro_2k' && userTier === 'free') ||
@@ -969,6 +967,7 @@ export default function App() {
                     return (
                       <button
                         key={item.id}
+                        type="button"
                         onClick={() => {
                           if (isLocked) {
                             openPremiumModal(
@@ -980,53 +979,38 @@ export default function App() {
                             handleSetResolution(item.id);
                           }
                         }}
-                        className={`py-2.5 px-3.5 rounded-xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                        className={`py-2 px-1 rounded-lg text-xs font-mono-numbers flex items-center justify-center gap-1 transition-colors cursor-pointer ${
                           isSelected
-                            ? 'bg-rose-500/10 border-rose-500/60 text-white'
+                            ? 'bg-rose-600 text-white font-semibold'
                             : isLocked
-                            ? 'bg-[#0b0e14]/60 border-white/[0.06] text-slate-400 hover:border-amber-500/40'
-                            : 'bg-[#0b0e14] border-white/[0.06] text-slate-300 hover:border-white/[0.15]'
+                            ? 'text-slate-500 hover:text-slate-300'
+                            : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        <div>
-                          <div className="text-xs font-semibold text-white">{item.label}</div>
-                          <div className="text-[11px] text-slate-400 font-mono-numbers mt-0.5">{item.spec}</div>
-                        </div>
-
-                        <div className="shrink-0 ml-2">
-                          {isLocked ? (
-                            <span className="text-xs font-mono-numbers text-amber-400 flex items-center gap-1">
-                              <Lock className="w-3 h-3" />
-                              <span>{item.tierReq === 'pro_2k' ? '₹29' : '₹99'}</span>
-                            </span>
-                          ) : isSelected ? (
-                            <span className="text-xs font-semibold text-rose-400">Active</span>
-                          ) : null}
-                        </div>
+                        <span>{item.label}</span>
+                        {isLocked && <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Frame Rate (FPS) Selection */}
-              <div className="pt-4 border-t border-white/[0.06] space-y-3">
+              {/* Frame Rate Selection */}
+              <div className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-white">Capture Frame Rate (FPS)</div>
-                    <div className="text-xs text-slate-400">Free: 60 FPS · Premium: 90 FPS (₹29) · Premium Plus: 120 FPS (₹99)</div>
+                    <div className="text-sm font-semibold text-white">Frame Rate</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Free up to 60 FPS · 90 &amp; 120 FPS with Premium</div>
                   </div>
-                  <span className="text-xs font-semibold font-mono-numbers text-rose-400">
-                    {fps} FPS
-                  </span>
+                  <span className="text-xs font-mono-numbers text-slate-400">{fps} FPS</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
                   {[
-                    { id: 30 as FpsOption, label: '30 FPS', sub: 'Standard (Free)', tierReq: 'free' },
-                    { id: 60 as FpsOption, label: '60 FPS', sub: 'Smooth (Free)', tierReq: 'free' },
-                    { id: 90 as FpsOption, label: '90 FPS', sub: 'Premium (₹29)', tierReq: 'pro_2k' },
-                    { id: 120 as FpsOption, label: '120 FPS', sub: 'Premium Plus (₹99)', tierReq: 'ultra_4k' },
+                    { id: 30 as FpsOption, label: '30 FPS', tierReq: 'free' },
+                    { id: 60 as FpsOption, label: '60 FPS', tierReq: 'free' },
+                    { id: 90 as FpsOption, label: '90 FPS', tierReq: 'pro_2k' },
+                    { id: 120 as FpsOption, label: '120 FPS', tierReq: 'ultra_4k' },
                   ].map((item) => {
                     const isLocked =
                       (item.tierReq === 'pro_2k' && userTier === 'free') ||
@@ -1035,30 +1019,69 @@ export default function App() {
                     return (
                       <button
                         key={item.id}
+                        type="button"
                         onClick={() => {
                           if (isLocked) {
                             openPremiumModal(
                               item.tierReq === 'pro_2k'
-                                ? '90 FPS High-Refresh Capture (Premium · ₹29)'
-                                : '120 FPS Ultra-Refresh Capture (Premium Plus · ₹99)'
+                                ? '90 FPS Capture (Premium · ₹29)'
+                                : '120 FPS Capture (Premium Plus · ₹99)'
                             );
                           } else {
                             handleSetFps(item.id);
                           }
                         }}
-                        className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-colors cursor-pointer ${
+                        className={`py-2 px-1 rounded-lg text-xs font-mono-numbers flex items-center justify-center gap-1 transition-colors cursor-pointer ${
                           isSelected
-                            ? 'bg-rose-500/10 border-rose-500/60 text-white'
+                            ? 'bg-rose-600 text-white font-semibold'
                             : isLocked
-                            ? 'bg-[#0b0e14]/60 border-white/[0.06] text-slate-400 hover:border-amber-500/40'
-                            : 'bg-[#0b0e14] border-white/[0.06] text-slate-300 hover:border-white/[0.15]'
+                            ? 'text-slate-500 hover:text-slate-300'
+                            : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <span className="text-xs font-semibold text-white font-mono-numbers">{item.label}</span>
-                          {isLocked && <Lock className="w-3 h-3 text-amber-400" />}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-mono-numbers">{item.sub}</div>
+                        <span>{item.label}</span>
+                        {isLocked && <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Audio Mode */}
+              <div className="p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Audio Mode</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{AUDIO_MODE_OPTIONS[audioMode].description}</div>
+                  </div>
+                  <span className="text-xs font-mono-numbers text-slate-400">
+                    {AUDIO_MODE_OPTIONS[audioMode].shortLabel}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1 p-1 bg-[#090b10] rounded-xl border border-white/[0.05]">
+                  {(
+                    [
+                      { id: 'game_only' as AudioRecordingMode, label: 'Game Audio', icon: Volume2 },
+                      { id: 'mic_only' as AudioRecordingMode, label: 'Mic Only', icon: Mic },
+                      { id: 'game_and_mic' as AudioRecordingMode, label: 'Game + Mic', icon: Headphones },
+                    ]
+                  ).map((item) => {
+                    const IconComp = item.icon;
+                    const isSelected = audioMode === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSetAudioMode(item.id)}
+                        className={`py-2 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-rose-600 text-white font-semibold'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <IconComp className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{item.label}</span>
                       </button>
                     );
                   })}
@@ -1066,73 +1089,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Audio Recording Mode Section (Game Audio Only / Mic Only / Game + Mic) */}
-            <div className="p-5 rounded-2xl bg-[#121620] border border-white/[0.07] space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-white">Audio Recording Mode</div>
-                  <div className="text-xs text-slate-400">
-                    Choose between Game Audio Only, Mic Only, or Game + Mic
-                  </div>
-                </div>
-                <span className="text-xs font-semibold font-mono-numbers text-rose-400">
-                  {AUDIO_MODE_OPTIONS[audioMode].label}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {(
-                  [
-                    {
-                      id: 'game_only' as AudioRecordingMode,
-                      label: 'Game Audio Only',
-                      sub: 'System sound only',
-                      icon: Volume2,
-                    },
-                    {
-                      id: 'mic_only' as AudioRecordingMode,
-                      label: 'Mic Only',
-                      sub: 'Voice commentary',
-                      icon: Mic,
-                    },
-                    {
-                      id: 'game_and_mic' as AudioRecordingMode,
-                      label: 'Game + Mic',
-                      sub: 'Both mixed live',
-                      icon: Headphones,
-                    },
-                  ]
-                ).map((item) => {
-                  const IconComp = item.icon;
-                  const isSelected = audioMode === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleSetAudioMode(item.id)}
-                      className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-1.5 transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-rose-500/10 border-rose-500/60 text-white'
-                          : 'bg-[#0b0e14] border-white/[0.06] text-slate-300 hover:border-white/[0.15]'
-                      }`}
-                    >
-                      <IconComp
-                        className={`w-4 h-4 ${isSelected ? 'text-rose-400' : 'text-slate-400'}`}
-                      />
-                      <div>
-                        <div className="text-xs font-semibold text-white leading-tight">{item.label}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">{item.sub}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="text-xs text-slate-400">
-                {AUDIO_MODE_OPTIONS[audioMode].description}
-              </div>
-            </div>
-
-            {/* Low Power Mode (Adaptive Battery Frame Rate & Bitrate Throttling) */}
+            {/* Low Power Mode */}
             <LowPowerModeCard
               config={lowPowerConfig}
               batteryStatus={batteryStatus}
@@ -1151,7 +1108,7 @@ export default function App() {
               onToggleSimulateLowBattery={toggleSimulatedLowBattery}
             />
 
-            {/* Recording Logo & Watermark Settings (Size, Custom Logo, Premium Hide) */}
+            {/* Logo & Watermark Settings */}
             <LogoSettingsCard
               logoConfig={logoConfig}
               onChangeLogoConfig={handleChangeLogoConfig}
@@ -1159,21 +1116,21 @@ export default function App() {
               onRequirePremium={openPremiumModal}
             />
 
-            {/* Floating Quick-Clip Bubble Card */}
-            <div className="p-5 rounded-2xl bg-[#121620] border border-white/[0.07] flex items-center justify-between gap-4">
+            {/* Floating Quick-Clip Bubble Toggle */}
+            <div className="p-5 rounded-2xl bg-[#11151e] border border-white/[0.06] flex items-center justify-between gap-4">
               <div>
-                <div className="text-sm font-semibold text-white">Floating Quick-Clip Bubble</div>
-                <div className="text-xs text-slate-400 mt-0.5">Draggable overlay for in-game clipping</div>
+                <div className="text-sm font-semibold text-white">Floating Quick-Clip Button</div>
+                <div className="text-xs text-slate-400 mt-0.5">Show a draggable quick-save button on screen</div>
               </div>
               <input
                 type="checkbox"
                 checked={showFloatingWidget}
                 onChange={(e) => setShowFloatingWidget(e.target.checked)}
-                className="w-5 h-5 accent-rose-500 cursor-pointer rounded shrink-0"
+                className="w-4 h-4 accent-rose-600 cursor-pointer rounded shrink-0"
               />
             </div>
 
-            {/* Visual IndexedDB Storage Quota & Usage Card */}
+            {/* Storage Usage Card */}
             <StorageUsageCard
               highlights={highlights}
               resolution={resolution}
@@ -1254,50 +1211,46 @@ export default function App() {
       </main>
 
       {/* Fixed Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0b0e14]/95 backdrop-blur-md border-t border-white/[0.06]">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#090b10]/95 backdrop-blur-md border-t border-white/[0.06]">
         <div className="max-w-4xl mx-auto grid grid-cols-5 items-center h-16 pb-safe px-2">
-          {/* Tab 1: Live Screen Capture & Game Feed */}
           <button
             onClick={() => setActiveTab('screen')}
             className={`flex flex-col items-center justify-center h-full transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'screen' ? 'text-rose-500 font-semibold' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'screen' ? 'text-white font-semibold' : 'text-slate-500 hover:text-slate-300'
             }`}
           >
-            <Monitor className="w-5 h-5" />
+            <Monitor className={`w-5 h-5 ${activeTab === 'screen' ? 'text-rose-500' : ''}`} />
             <span className="text-[11px] mt-1">Screen</span>
           </button>
 
-          {/* Tab 2: Buffer Deck */}
           <button
             onClick={() => setActiveTab('buffer')}
             className={`flex flex-col items-center justify-center h-full transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'buffer' ? 'text-rose-500 font-semibold' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'buffer' ? 'text-white font-semibold' : 'text-slate-500 hover:text-slate-300'
             }`}
           >
-            <Radio className="w-5 h-5" />
+            <Radio className={`w-5 h-5 ${activeTab === 'buffer' ? 'text-rose-500' : ''}`} />
             <span className="text-[11px] mt-1">Buffer</span>
           </button>
 
-          {/* Center Option: Get Premium */}
           <button
             onClick={() => setActiveTab('premium')}
             className={`flex flex-col items-center justify-center h-full transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'premium' ? 'text-amber-400 font-semibold' : 'text-slate-400 hover:text-amber-300'
+              activeTab === 'premium' ? 'text-white font-semibold' : 'text-slate-500 hover:text-slate-300'
             }`}
           >
-            <Crown className={`w-5 h-5 ${activeTab === 'premium' ? 'text-amber-400 fill-amber-400/20' : 'text-amber-400/80'}`} />
-            <span className="text-[11px] mt-1">Premium</span>
+            <Crown className={`w-5 h-5 ${activeTab === 'premium' ? 'text-rose-500' : ''}`} />
+            <span className="text-[11px] mt-1">Plans</span>
           </button>
 
-          {/* Tab 4: Highlight Vault */}
           <button
             onClick={() => setActiveTab('vault')}
             className={`relative flex flex-col items-center justify-center h-full transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'vault' ? 'text-rose-500 font-semibold' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'vault' ? 'text-white font-semibold' : 'text-slate-500 hover:text-slate-300'
             }`}
           >
             <div className="relative">
-              <Film className="w-5 h-5" />
+              <Film className={`w-5 h-5 ${activeTab === 'vault' ? 'text-rose-500' : ''}`} />
               {highlights.length > 0 && (
                 <span className="absolute -top-1.5 -right-3 text-[10px] font-mono-numbers font-semibold text-rose-400">
                   {highlights.length}
@@ -1307,14 +1260,13 @@ export default function App() {
             <span className="text-[11px] mt-1">Vault</span>
           </button>
 
-          {/* Tab 5: Settings */}
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex flex-col items-center justify-center h-full transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'settings' ? 'text-rose-500 font-semibold' : 'text-slate-400 hover:text-slate-200'
+              activeTab === 'settings' ? 'text-white font-semibold' : 'text-slate-500 hover:text-slate-300'
             }`}
           >
-            <Settings className="w-5 h-5" />
+            <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-rose-500' : ''}`} />
             <span className="text-[11px] mt-1">Settings</span>
           </button>
         </div>

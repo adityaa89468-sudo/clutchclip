@@ -59,6 +59,9 @@ interface ClutchClipNativeInterface {
   getBatteryStatusJson?: () => string;
   triggerHaptic?: (durationMs: number) => void;
   getDeviceInfoJson?: () => string;
+  purchaseSubscription?: (productId: string, basePlanId: string) => void;
+  restorePlayPurchases?: () => void;
+  openPlayStoreSubscriptions?: (productId: string) => void;
 }
 
 declare global {
@@ -68,6 +71,8 @@ declare global {
     onNativeScreenCaptureResult?: (success: boolean, errorMessage: string | null) => void;
     onNativeScreenCaptureStopped?: () => void;
     onNativeClipSaved?: (jsonPayload: string) => void;
+    onNativePlayBillingResult?: (jsonPayload: string) => void;
+    onNativePlayRestoreResult?: (jsonPayload: string) => void;
   }
 }
 

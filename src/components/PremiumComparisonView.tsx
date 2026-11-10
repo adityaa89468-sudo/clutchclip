@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import {
-  Crown,
   Check,
   X,
-  ShieldCheck,
-  Sparkles,
   RefreshCw,
   CheckCircle2,
-  Receipt,
-  Clock,
-  UserCheck,
-  LogIn
+  AlertCircle,
+  LogIn,
+  ExternalLink,
 } from 'lucide-react';
 import { MembershipTier } from '../types/recorder';
 import {
@@ -36,98 +32,54 @@ const COMPARISON_ROWS: Array<{
   free: string | boolean;
   pro29: string | boolean;
   ultra99: string | boolean;
-  highlight?: boolean;
 }> = [
   {
     feature: 'Monthly Price',
-    free: '₹0 (Free Forever)',
-    pro29: '₹29 / 1 Month',
-    ultra99: '₹99 / 1 Month',
-    highlight: true,
+    free: '₹0',
+    pro29: '₹29 / month',
+    ultra99: '₹99 / month',
   },
   {
     feature: 'Max Video Resolution',
     free: '1080p Full HD',
     pro29: '2K QHD (1440p)',
     ultra99: '4K UHD (2160p)',
-    highlight: true,
   },
   {
-    feature: 'Max Frame Rate (FPS)',
+    feature: 'Max Frame Rate',
     free: '60 FPS',
-    pro29: '90 FPS Esports',
-    ultra99: '120 FPS Ultra',
-    highlight: true,
+    pro29: '90 FPS',
+    ultra99: '120 FPS',
   },
   {
-    feature: 'Target Video Bitrate',
+    feature: 'Video Bitrate',
     free: '6.5 Mbps',
     pro29: '12.0 Mbps',
-    ultra99: '22.0 Mbps Studio',
+    ultra99: '22.0 Mbps',
   },
   {
-    feature: '5-Min Rolling Replay Buffer',
+    feature: '5-Minute Replay Buffer',
     free: true,
     pro29: true,
     ultra99: true,
   },
   {
-    feature: 'Audio Recording (Game Only · Mic Only · Game + Mic)',
-    free: true,
-    pro29: true,
-    ultra99: true,
-  },
-  {
-    feature: 'Ad-Free Experience (Remove All Ads)',
-    free: 'Ads Active (Free User)',
-    pro29: '100% Ad-Free (Ads Removed)',
-    ultra99: '100% Ad-Free (Ads Removed)',
-    highlight: true,
-  },
-  {
-    feature: 'Google Banner Ads',
-    free: 'Used for Free Users',
-    pro29: 'Removed for Premium',
-    ultra99: 'Removed for Premium Plus',
-    highlight: true,
-  },
-  {
-    feature: 'Google App Open Ads',
-    free: 'Used for Free Users',
-    pro29: 'Removed for Premium',
-    ultra99: 'Removed for Premium Plus',
-    highlight: true,
-  },
-  {
-    feature: 'Hide Logo in Recorded Video (Kept on Screen)',
-    free: 'Logo in Recorded Video',
-    pro29: 'Hidden in Video (Shown on Screen)',
-    ultra99: 'Hidden in Video (Shown on Screen)',
-    highlight: true,
-  },
-  {
-    feature: 'Custom Clan / Brand Logo',
+    feature: 'Ad-Free Experience',
     free: false,
     pro29: true,
     ultra99: true,
   },
   {
-    feature: 'Adaptive Low Power Mode',
-    free: true,
+    feature: 'Hide Logo in Saved Clips',
+    free: false,
     pro29: true,
     ultra99: true,
   },
   {
-    feature: '120Hz High-Refresh Encoder',
+    feature: 'Custom Brand Logo',
     free: false,
-    pro29: false,
+    pro29: true,
     ultra99: true,
-  },
-  {
-    feature: 'Plan Validity',
-    free: 'Unlimited (Ad-Supported)',
-    pro29: '30 Days (1 Month)',
-    ultra99: '30 Days (1 Month)',
   },
 ];
 
@@ -143,80 +95,89 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
   const [pendingSignInTier, setPendingSignInTier] = useState<'pro_2k' | 'ultra_4k' | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [latestReceipt, setLatestReceipt] = useState<PlayBillingReceipt | null>(playReceipt || null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isErrorStatus, setIsErrorStatus] = useState(false);
 
   const daysRemaining =
     tierExpiresAt && tierExpiresAt > Date.now()
       ? Math.max(1, Math.ceil((tierExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))
       : null;
 
-  // Execute Google Play Billing activation once user is signed in with Google
   const executePlanActivation = async (tierToBuy: 'pro_2k' | 'ultra_4k', verifiedUser: User) => {
     setProcessingTier(tierToBuy);
     setStatusMessage(null);
+    setIsErrorStatus(false);
+    setConfirmCancel(false);
     try {
-      // First check if this Google account already bought a valid premium plan in Firestore
-      const existingRecord = await fetchUserSubscriptionFromFirestore(verifiedUser);
-      if (
-        existingRecord &&
-        existingRecord.tier === tierToBuy &&
-        existingRecord.expiresAtMs > Date.now()
-      ) {
-        const restoredReceipt: PlayBillingReceipt = {
-          orderId: existingRecord.orderId || 'GPA.VERIFIED-ACCOUNT',
-          packageName: ANDROID_PACKAGE_NAME,
-          productId: existingRecord.productId || GOOGLE_PLAY_SKUS[tierToBuy].itemId,
-          tier: tierToBuy,
-          purchaseTime: Date.now(),
-          expiresAt: existingRecord.expiresAtMs,
-          purchaseToken: `verified_${verifiedUser.uid}`,
-          paymentMethod: existingRecord.paymentMethod || 'Google Play Billing',
-          amountPaid: existingRecord.amountPaid || GOOGLE_PLAY_SKUS[tierToBuy].formattedPrice,
-          acknowledged: true,
-          autoRenewing: true,
-        };
-        setLatestReceipt(restoredReceipt);
-        soundEffects.playClipSavedSound();
-        onUnlockTier(tierToBuy, restoredReceipt, verifiedUser);
-        setStatusMessage(
-          `Verified existing ${GOOGLE_PLAY_SKUS[tierToBuy].title} on ${verifiedUser.email}!`
-        );
-        return;
+      const isNativeApkBilling =
+        typeof window !== 'undefined' && Boolean(window.ClutchClipAndroid?.purchaseSubscription);
+
+      if (!isNativeApkBilling) {
+        const existingRecord = await fetchUserSubscriptionFromFirestore(verifiedUser);
+        if (
+          existingRecord &&
+          existingRecord.tier === tierToBuy &&
+          existingRecord.expiresAtMs > Date.now() &&
+          currentTier !== tierToBuy
+        ) {
+          const sku = GOOGLE_PLAY_SKUS[tierToBuy];
+          const restoredReceipt: PlayBillingReceipt = {
+            orderId: existingRecord.orderId || 'GPA.VERIFIED-ACCOUNT',
+            packageName: ANDROID_PACKAGE_NAME,
+            productId: existingRecord.productId || sku.itemId,
+            basePlanId: sku.basePlanId,
+            tier: tierToBuy,
+            purchaseTime: Date.now(),
+            expiresAt: existingRecord.expiresAtMs,
+            purchaseToken: `verified_${verifiedUser.uid}`,
+            paymentMethod: existingRecord.paymentMethod || 'Google Play Billing',
+            amountPaid: existingRecord.amountPaid || sku.formattedPrice,
+            acknowledged: true,
+            autoRenewing: true,
+          };
+          setLatestReceipt(restoredReceipt);
+          soundEffects.playClipSavedSound();
+          onUnlockTier(tierToBuy, restoredReceipt, verifiedUser);
+          setStatusMessage(
+            `Verified existing ${sku.title} on ${verifiedUser.email}.`
+          );
+          return;
+        }
       }
 
-      const sku = GOOGLE_PLAY_SKUS[tierToBuy];
-      await new Promise((r) => setTimeout(r, 550));
       const receipt = await googlePlayBilling.purchaseSubscription(tierToBuy, 'Google Play Billing');
       setLatestReceipt(receipt);
       soundEffects.playClipSavedSound();
-      onUnlockTier(tierToBuy, receipt, verifiedUser);
+      onUnlockTier(receipt.tier, receipt, verifiedUser);
       setStatusMessage(
-        `Activated ${sku.title} for ${verifiedUser.email} via Google Play Billing!`
+        `Activated ${GOOGLE_PLAY_SKUS[receipt.tier].title} (${receipt.basePlanId || GOOGLE_PLAY_SKUS[receipt.tier].basePlanId}) for ${verifiedUser.email}.`
+      );
+    } catch (err) {
+      setIsErrorStatus(true);
+      setStatusMessage(
+        err instanceof Error ? err.message : 'Could not complete Google Play subscription.'
       );
     } finally {
       setProcessingTier(null);
     }
   };
 
-  // When user clicks on Activate Plan: Firstly ask user to sign in via Google if not signed in
   const handleClickActivatePlan = async (tierToBuy: 'pro_2k' | 'ultra_4k') => {
     if (processingTier !== null || isSigningIn) return;
-
     if (!currentUser) {
-      // Prompt user to sign in via Google first so we can check/link which user bought premium
       setPendingSignInTier(tierToBuy);
       return;
     }
-
     await executePlanActivation(tierToBuy, currentUser);
   };
 
-  // Handle Google Sign-In from the prompt and then check/activate the selected plan
   const handleSignInAndActivate = async () => {
     if (!pendingSignInTier) return;
     setIsSigningIn(true);
     setStatusMessage(null);
+    setIsErrorStatus(false);
     try {
       const signedInUser = await onRequireGoogleSignIn();
       if (signedInUser) {
@@ -229,9 +190,20 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
     }
   };
 
+  const handleConfirmCancelSubscription = () => {
+    googlePlayBilling.clearReceipt();
+    setLatestReceipt(null);
+    setConfirmCancel(false);
+    setIsErrorStatus(false);
+    onUnlockTier('free', null, currentUser);
+    setStatusMessage('Subscription cancelled. You are now on the Free plan.');
+  };
+
   const handleRestore = async () => {
     setIsRestoring(true);
     setStatusMessage(null);
+    setIsErrorStatus(false);
+    setConfirmCancel(false);
     try {
       let activeUser = currentUser;
       if (!activeUser) {
@@ -239,12 +211,23 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
         if (!activeUser) return;
       }
 
+      const restored = await googlePlayBilling.restorePurchases();
+      if (restored) {
+        setLatestReceipt(restored);
+        onUnlockTier(restored.tier, restored, activeUser);
+        soundEffects.playClipSavedSound();
+        setStatusMessage(`Restored active Google Play plan for ${activeUser.email}.`);
+        return;
+      }
+
       const cloudSub = await fetchUserSubscriptionFromFirestore(activeUser);
       if (cloudSub && cloudSub.tier !== 'free' && cloudSub.expiresAtMs > Date.now()) {
+        const sku = GOOGLE_PLAY_SKUS[cloudSub.tier];
         const restoredReceipt: PlayBillingReceipt = {
           orderId: cloudSub.orderId || 'GPA.CLOUD-RESTORED',
           packageName: ANDROID_PACKAGE_NAME,
-          productId: cloudSub.productId,
+          productId: cloudSub.productId || sku.itemId,
+          basePlanId: sku.basePlanId,
           tier: cloudSub.tier,
           purchaseTime: Date.now(),
           expiresAt: cloudSub.expiresAtMs,
@@ -257,19 +240,12 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
         setLatestReceipt(restoredReceipt);
         onUnlockTier(cloudSub.tier, restoredReceipt, activeUser);
         soundEffects.playClipSavedSound();
-        setStatusMessage(`Verified & restored ${cloudSub.tier === 'ultra_4k' ? 'Premium Plus' : 'Premium'} for ${activeUser.email}`);
+        setStatusMessage(`Restored ${cloudSub.tier === 'ultra_4k' ? 'Premium Plus' : 'Premium'} for ${activeUser.email}.`);
         return;
       }
 
-      const restored = await googlePlayBilling.restorePurchases();
-      if (restored) {
-        setLatestReceipt(restored);
-        onUnlockTier(restored.tier, restored, activeUser);
-        soundEffects.playClipSavedSound();
-        setStatusMessage(`Restored active Google Play plan for ${activeUser.email}`);
-      } else {
-        setStatusMessage(`No active premium subscription found for ${activeUser.email}.`);
-      }
+      setIsErrorStatus(true);
+      setStatusMessage(`No active subscription found for ${activeUser.email}.`);
     } finally {
       setIsRestoring(false);
     }
@@ -277,107 +253,134 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-5 pb-10 select-none">
-      {/* Hero Banner */}
-      <div className="p-6 rounded-2xl bg-[#121620] border border-white/[0.07] space-y-3">
+      {/* Header Card */}
+      <div className="p-6 rounded-2xl bg-[#11151e] border border-white/[0.06] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs text-amber-400 font-medium">
-              <Crown className="w-4 h-4 fill-amber-400 text-amber-400" />
-              <span>ClutchClip Memberships</span>
-              <span aria-hidden="true" className="text-slate-600">·</span>
-              <span className="text-slate-400">
-                {currentUser ? `Signed in as ${currentUser.email}` : 'Google Sign-In required on activation'}
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold font-display text-white tracking-tight">
-              Upgrade Your Recording Studio
+          <div className="space-y-1">
+            <h2 className="text-xl sm:text-2xl font-semibold font-display text-white tracking-tight">
+              ClutchClip Plans
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 max-w-xl leading-relaxed">
-              The Free plan is available to everyone. Upgrade to <strong className="text-slate-200">Premium (₹29)</strong> or <strong className="text-slate-200">Premium Plus (₹99)</strong> to unlock 2K/4K high-frame-rate capture, remove all ads, and hide the watermark in recorded videos.
+              Unlock 2K/4K high-refresh recording, remove all ads, and hide the watermark in saved video clips.
             </p>
           </div>
 
-          {currentTier !== 'free' && daysRemaining && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-left sm:text-right shrink-0">
-              <div className="flex items-center sm:justify-end gap-1.5 text-xs font-semibold text-emerald-400">
-                <Clock className="w-3.5 h-3.5" />
-                <span>{currentTier === 'ultra_4k' ? 'Premium Plus Active' : 'Premium Active'}</span>
+          {currentTier !== 'free' && (
+            <div className="text-left sm:text-right shrink-0">
+              <div className="text-xs font-semibold text-emerald-400">
+                {currentTier === 'ultra_4k' ? 'Premium Plus Active' : 'Premium Active'}
               </div>
-              <div className="text-xs font-mono-numbers text-slate-300 mt-0.5">
-                {daysRemaining} days remaining
-              </div>
+              {daysRemaining && (
+                <div className="text-xs font-mono-numbers text-slate-400 mt-0.5">
+                  {daysRemaining} days remaining
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        {/* Active Subscription Management & Cancel Option */}
+        {currentTier !== 'free' && (
+          <div className="pt-4 border-t border-white/[0.06]">
+            {!confirmCancel ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-400">
+                  Current plan:{' '}
+                  <span className="text-white font-medium">
+                    {currentTier === 'ultra_4k'
+                      ? 'Premium Plus (₹99/mo · monthly-ultra-4k)'
+                      : 'Premium (₹29/mo · monthly-pro-2k)'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => googlePlayBilling.openManageSubscriptions(currentTier)}
+                    className="text-xs text-slate-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span>Google Play Subscriptions</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(true)}
+                    className="py-1.5 px-3 rounded-lg bg-white/[0.04] hover:bg-rose-500/15 border border-white/[0.08] hover:border-rose-500/30 text-slate-300 hover:text-rose-300 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    Cancel Subscription
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-[#090b10] border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-semibold text-white">
+                    Cancel your active subscription?
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Your account will immediately switch back to the Free plan (1080p · 60 FPS).
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleConfirmCancelSubscription}
+                    className="py-1.5 px-3.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Confirm Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancel(false)}
+                    className="py-1.5 px-3 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    Keep Plan
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Step 1 Prompt Modal/Banner: Ask User to Sign In via Google First when clicking Activate Plan */}
+      {/* Step 1 Prompt when not signed in */}
       {pendingSignInTier && !currentUser && (
-        <div className="p-5 rounded-2xl bg-[#121620] border border-sky-500/40 shadow-xl space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="p-5 rounded-2xl bg-[#11151e] border border-white/[0.12] space-y-3.5">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 000 10.76l3.98-3.09z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <div className="text-xs font-medium text-sky-400">
-                  Step 1 of 2 · Account Verification
-                </div>
-                <h3 className="text-sm sm:text-base font-bold font-display text-white">
-                  Sign in with Google to activate{' '}
-                  {pendingSignInTier === 'ultra_4k' ? 'Premium Plus (₹99)' : 'Premium (₹29)'}
-                </h3>
-              </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">
+                Sign in with Google to continue
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Link your {pendingSignInTier === 'ultra_4k' ? 'Premium Plus (₹99)' : 'Premium (₹29)'} subscription to your Google account.
+              </p>
             </div>
             <button
               type="button"
               onClick={() => setPendingSignInTier(null)}
-              className="p-1.5 rounded-lg bg-white/[0.05] text-slate-400 hover:text-white cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Sign in with your Google account so we can verify your membership and link your{' '}
-            <strong>{GOOGLE_PLAY_SKUS[pendingSignInTier].title}</strong> pass directly to your profile.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <button
               type="button"
               onClick={handleSignInAndActivate}
               disabled={isSigningIn}
-              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-display font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
             >
-              <LogIn className="w-4 h-4 text-sky-600" />
+              <LogIn className="w-4 h-4" />
               <span>
                 {isSigningIn
-                  ? 'Signing in with Google...'
-                  : `Sign in with Google & Activate ${pendingSignInTier === 'ultra_4k' ? 'Premium Plus (₹99)' : 'Premium (₹29)'}`}
+                  ? 'Signing in...'
+                  : `Continue with Google · ${pendingSignInTier === 'ultra_4k' ? '₹99' : '₹29'}`}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setPendingSignInTier(null)}
-              className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium cursor-pointer"
+              className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 text-xs font-medium cursor-pointer"
             >
               Cancel
             </button>
@@ -385,263 +388,219 @@ export const PremiumComparisonView: React.FC<PremiumComparisonViewProps> = ({
         </div>
       )}
 
-      {/* Status / Receipt Banner if just purchased via Google Play Billing */}
       {statusMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-300 flex items-center justify-between gap-2">
+        <div
+          className={`p-3.5 rounded-xl bg-[#11151e] border text-xs flex items-center justify-between gap-2 ${
+            isErrorStatus
+              ? 'border-rose-500/30 text-rose-300'
+              : 'border-emerald-500/30 text-emerald-300'
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            {isErrorStatus ? (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
             <span>{statusMessage}</span>
           </div>
-          {latestReceipt && (
-            <span className="text-xs font-medium text-emerald-200 flex items-center gap-1 shrink-0">
-              <Receipt className="w-3.5 h-3.5" />
-              <span>Verified</span>
+          {latestReceipt && !isErrorStatus && (
+            <span className="text-xs font-mono-numbers text-slate-400 shrink-0">
+              {latestReceipt.orderId}
             </span>
           )}
         </div>
       )}
 
-      {/* Free User Plan Overview Banner */}
-      <div className="p-5 rounded-2xl bg-[#121620] border border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="font-semibold text-white">Free Plan</span>
-            <span aria-hidden="true">·</span>
-            <span>Ad-Supported (Google Banner &amp; App Open Ads)</span>
-            <span aria-hidden="true">·</span>
-            <span>Watermarked Video</span>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Includes <strong className="text-slate-200">1080p 60 FPS</strong> and <strong className="text-slate-200">5-Minute Replay Buffer</strong> for free users. Upgrade to <strong className="text-amber-300">Premium (₹29)</strong> or <strong className="text-rose-400">Premium Plus (₹99)</strong> to remove all ads and hide the logo in recorded videos.
-          </p>
-        </div>
-        <div className="shrink-0 text-left sm:text-right">
-          <span className="text-xl font-bold font-mono-numbers text-white">₹0</span>
-          <div className="text-xs text-slate-400">
-            {currentTier === 'free' ? 'Current Plan' : 'Included'}
-          </div>
-        </div>
-      </div>
-
-      {/* Side-by-Side Plan Cards */}
+      {/* 2 Plan Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
-        {/* Plan 1: ₹29 Premium (2K + 90 FPS) */}
+        {/* Plan 1: Premium ₹29 (clutchclip_pro_2k_90fps_monthly / monthly-pro-2k) */}
         <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleClickActivatePlan('pro_2k')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleClickActivatePlan('pro_2k');
-            }
-          }}
-          className={`p-5 rounded-2xl border transition-colors flex flex-col justify-between cursor-pointer ${
+          className={`p-5 rounded-2xl border transition-colors flex flex-col justify-between ${
             currentTier === 'pro_2k'
-              ? 'border-amber-400/70 bg-amber-500/[0.06]'
-              : 'border-white/[0.08] bg-[#121620] hover:border-amber-400/50'
+              ? 'border-white/30 bg-[#141924]'
+              : 'border-white/[0.06] bg-[#11151e] hover:border-white/[0.15]'
           }`}
         >
           <div>
-            <div className="flex items-center justify-between gap-2 text-xs text-amber-400 font-medium">
+            <div className="flex items-center justify-between text-xs text-slate-400">
               <span>2K QHD · 90 FPS</span>
-              <span className="font-mono-numbers text-slate-400">30 Days</span>
+              <span className="font-mono-numbers">Monthly · auto-renewing</span>
             </div>
 
             <div className="mt-2 flex items-baseline justify-between gap-2">
-              <h3 className="text-lg font-bold font-display text-white">Premium</h3>
+              <h3 className="text-lg font-semibold font-display text-white">Premium</h3>
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-bold font-mono-numbers text-white">₹29</span>
-                <span className="text-xs text-slate-400">/ month</span>
+                <span className="text-xs text-slate-400">/ mo</span>
               </div>
             </div>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Unlocks 2K (1440p) at 90 FPS, removes all ads, and hides the logo in recorded videos.
-            </p>
 
-            <ul className="mt-4 pt-4 border-t border-white/[0.06] space-y-2.5 text-xs text-slate-300">
+            <ul className="mt-4 pt-4 border-t border-white/[0.05] space-y-2.5 text-xs text-slate-300">
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span><strong className="text-white">2K QHD (2560×1440)</strong> Resolution</span>
+                <Check className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span>2K QHD (2560×1440) resolution</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span><strong className="text-white">90 FPS</strong> High-Refresh Capture</span>
+                <Check className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span>90 FPS high-refresh capture</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span><strong className="text-white">12 Mbps</strong> High-Bitrate Stream</span>
+                <Check className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span>Hide watermark in saved videos</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                <span><strong className="text-white">Hide Logo in Recorded Video</strong> (Kept on Screen)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span><strong className="text-white">100% Ad-Free</strong> (Removes Banner &amp; App Open Ads)</span>
+                <Check className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span>Ad-free experience</span>
               </li>
             </ul>
           </div>
 
-          <div className="mt-6 w-full py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors">
-            {processingTier === 'pro_2k' ? (
-              <span>Activating Premium...</span>
-            ) : currentTier === 'pro_2k' ? (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Premium Active · Renew ₹29</span>
-              </>
-            ) : (
-              <span>Activate Premium — ₹29</span>
+          <div className="mt-6 space-y-2">
+            <button
+              type="button"
+              onClick={() => handleClickActivatePlan('pro_2k')}
+              disabled={processingTier !== null}
+              className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-950 font-display font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {processingTier === 'pro_2k' ? (
+                <span>Opening Google Play...</span>
+              ) : currentTier === 'pro_2k' ? (
+                <span>Active · Renew ₹29</span>
+              ) : (
+                <span>Choose Premium — ₹29</span>
+              )}
+            </button>
+
+            {currentTier === 'pro_2k' && (
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(true)}
+                className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-rose-500/15 text-slate-400 hover:text-rose-300 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel Subscription
+              </button>
             )}
           </div>
         </div>
 
-        {/* Plan 2: ₹99 Premium Plus (4K + 120 FPS) */}
+        {/* Plan 2: Premium Plus ₹99 (clutchclip_ultra_4k_120fps_monthly / monthly-ultra-4k) */}
         <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleClickActivatePlan('ultra_4k')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleClickActivatePlan('ultra_4k');
-            }
-          }}
-          className={`p-5 rounded-2xl border transition-colors flex flex-col justify-between cursor-pointer ${
+          className={`p-5 rounded-2xl border transition-colors flex flex-col justify-between ${
             currentTier === 'ultra_4k'
-              ? 'border-rose-500/80 bg-rose-500/[0.06]'
-              : 'border-rose-500/35 bg-[#121620] hover:border-rose-500/70'
+              ? 'border-rose-500/60 bg-[#141924]'
+              : 'border-rose-500/25 bg-[#11151e] hover:border-rose-500/50'
           }`}
         >
           <div>
-            <div className="flex items-center justify-between gap-2 text-xs text-rose-400 font-medium">
+            <div className="flex items-center justify-between text-xs text-rose-400">
               <span>4K UHD · 120 FPS</span>
-              <span className="font-mono-numbers text-slate-400">30 Days</span>
+              <span className="font-mono-numbers text-slate-400">Monthly · auto-renewing</span>
             </div>
 
             <div className="mt-2 flex items-baseline justify-between gap-2">
-              <h3 className="text-lg font-bold font-display text-white">Premium Plus</h3>
+              <h3 className="text-lg font-semibold font-display text-white">Premium Plus</h3>
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-bold font-mono-numbers text-white">₹99</span>
-                <span className="text-xs text-slate-400">/ month</span>
+                <span className="text-xs text-slate-400">/ mo</span>
               </div>
             </div>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Unlocks 4K (2160p) at 120 FPS, removes all ads, and hides the logo in recorded videos.
-            </p>
 
-            <ul className="mt-4 pt-4 border-t border-white/[0.06] space-y-2.5 text-xs text-slate-300">
+            <ul className="mt-4 pt-4 border-t border-white/[0.05] space-y-2.5 text-xs text-slate-300">
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-rose-400 shrink-0" />
-                <span><strong className="text-white">Full 4K UHD (3840×2160)</strong> Resolution</span>
+                <Check className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>Full 4K UHD (3840×2160) resolution</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-rose-400 shrink-0" />
-                <span><strong className="text-white">120 FPS</strong> Ultra-Refresh Capture</span>
+                <Check className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>120 FPS ultra-refresh capture</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-rose-400 shrink-0" />
-                <span><strong className="text-white">22 Mbps</strong> Studio Bitrate + All Premium Features</span>
+                <Check className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>22 Mbps studio bitrate</span>
               </li>
               <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-rose-400 shrink-0" />
-                <span><strong className="text-white">Hide Logo in Recorded Video</strong> (Kept on Screen)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span><strong className="text-white">100% Ad-Free</strong> (Removes Banner &amp; App Open Ads)</span>
+                <Check className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span>Ad-free + hidden video watermark</span>
               </li>
             </ul>
           </div>
 
-          <div className="mt-6 w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-display font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors">
-            {processingTier === 'ultra_4k' ? (
-              <span>Activating Premium Plus...</span>
-            ) : currentTier === 'ultra_4k' ? (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Premium Plus Active · Renew ₹99</span>
-              </>
-            ) : (
-              <span>Activate Premium Plus — ₹99</span>
+          <div className="mt-6 space-y-2">
+            <button
+              type="button"
+              onClick={() => handleClickActivatePlan('ultra_4k')}
+              disabled={processingTier !== null}
+              className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-display font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {processingTier === 'ultra_4k' ? (
+                <span>Opening Google Play...</span>
+              ) : currentTier === 'ultra_4k' ? (
+                <span>Active · Renew ₹99</span>
+              ) : (
+                <span>Choose Premium Plus — ₹99</span>
+              )}
+            </button>
+
+            {currentTier === 'ultra_4k' && (
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(true)}
+                className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-rose-500/15 text-slate-400 hover:text-rose-300 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel Subscription
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Full Side-by-Side Comparison Table */}
-      <div className="rounded-2xl bg-[#121620] border border-white/[0.07] overflow-hidden">
-        <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-white font-display">
-            Plans Comparison
-          </h3>
+      {/* Clean Comparison Table */}
+      <div className="rounded-2xl bg-[#11151e] border border-white/[0.06] overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/[0.05] flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-white">Plan Comparison</h3>
           <button
             type="button"
             onClick={handleRestore}
             disabled={isRestoring}
-            className="text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="text-xs font-medium text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isRestoring ? 'animate-spin' : ''}`} />
-            <span>{isRestoring ? 'Checking...' : 'Restore Purchase'}</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRestoring ? 'animate-spin' : ''}`} />
+            <span>{isRestoring ? 'Restoring...' : 'Restore Purchase'}</span>
           </button>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                <th className="py-3 px-4 text-slate-400 font-medium">Feature</th>
-                <th className="py-3 px-4 text-slate-300 font-semibold">Free (₹0)</th>
-                <th className="py-3 px-4 text-amber-400 font-semibold">
-                  Premium (₹29)
-                </th>
-                <th className="py-3 px-4 text-rose-400 font-semibold">
-                  Premium Plus (₹99)
-                </th>
+              <tr className="border-b border-white/[0.05] text-slate-400">
+                <th className="py-3 px-4 font-medium">Feature</th>
+                <th className="py-3 px-4 font-medium">Free</th>
+                <th className="py-3 px-4 font-medium text-white">Premium</th>
+                <th className="py-3 px-4 font-medium text-rose-400">Premium Plus</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.05]">
+            <tbody className="divide-y divide-white/[0.04]">
               {COMPARISON_ROWS.map((row) => (
-                <tr key={row.feature} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="py-3 px-4 font-medium text-slate-300">{row.feature}</td>
+                <tr key={row.feature}>
+                  <td className="py-3 px-4 text-slate-300">{row.feature}</td>
                   <td className="py-3 px-4 font-mono-numbers text-slate-400">
                     {typeof row.free === 'boolean' ? (
-                      row.free ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <X className="w-4 h-4 text-slate-600" />
-                      )
+                      row.free ? <Check className="w-4 h-4 text-slate-300" /> : <X className="w-4 h-4 text-slate-600" />
                     ) : (
                       row.free
                     )}
                   </td>
-                  <td
-                    className={`py-3 px-4 font-mono-numbers ${
-                      row.highlight ? 'font-semibold text-amber-300' : 'text-slate-200'
-                    }`}
-                  >
+                  <td className="py-3 px-4 font-mono-numbers text-slate-200">
                     {typeof row.pro29 === 'boolean' ? (
-                      row.pro29 ? (
-                        <Check className="w-4 h-4 text-amber-400" />
-                      ) : (
-                        <X className="w-4 h-4 text-slate-600" />
-                      )
+                      row.pro29 ? <Check className="w-4 h-4 text-white" /> : <X className="w-4 h-4 text-slate-600" />
                     ) : (
                       row.pro29
                     )}
                   </td>
-                  <td
-                    className={`py-3 px-4 font-mono-numbers ${
-                      row.highlight ? 'font-semibold text-rose-300' : 'text-slate-200'
-                    }`}
-                  >
+                  <td className="py-3 px-4 font-mono-numbers text-slate-200">
                     {typeof row.ultra99 === 'boolean' ? (
-                      row.ultra99 ? (
-                        <Check className="w-4 h-4 text-rose-400" />
-                      ) : (
-                        <X className="w-4 h-4 text-slate-600" />
-                      )
+                      row.ultra99 ? <Check className="w-4 h-4 text-rose-400" /> : <X className="w-4 h-4 text-slate-600" />
                     ) : (
                       row.ultra99
                     )}

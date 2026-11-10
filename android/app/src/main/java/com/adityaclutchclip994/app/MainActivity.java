@@ -16,28 +16,33 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.Settings;
 import android.util.Base64;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.widget.FrameLayout;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import com.android.billingclient.api.AcknowledgePurchaseParams;
+import com.android.billingclient.api.BillingClient;
+import com.android.billingclient.api.BillingClientStateListener;
+import com.android.billingclient.api.BillingFlowParams;
+import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.PendingPurchasesParams;
+import com.android.billingclient.api.ProductDetails;
+import com.android.billingclient.api.ProductDetailsResponseListener;
+import com.android.billingclient.api.Purchase;
+import com.android.billingclient.api.PurchasesUpdatedListener;
+import com.android.billingclient.api.QueryProductDetailsParams;
+import com.android.billingclient.api.QueryProductDetailsResult;
+import com.android.billingclient.api.QueryPurchasesParams;
 import com.getcapacitor.BridgeActivity;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdSize;
 import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.appopen.AppOpenAd;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
@@ -49,15 +54,22 @@ import com.google.android.gms.tasks.Task;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.json.JSONObject;
 
-public class MainActivity extends BridgeActivity {
+public class MainActivity extends BridgeActivity implements PurchasesUpdatedListener {
 
     // Google AdMob Production IDs for com.adityaclutchclip994.app
     public static final String ADMOB_APP_ID = "ca-app-pub-9364231981895017~4610236291";
     public static final String ADMOB_BANNER_AD_UNIT_ID = "ca-app-pub-9364231981895017/9806722652";
     public static final String ADMOB_APP_OPEN_AD_UNIT_ID = "ca-app-pub-9364231981895017/9335774357";
+
+    // Official Google Play Console Subscription Product IDs & Base Plan IDs
+    public static final String SKU_PRO_2K = "clutchclip_pro_2k_90fps_monthly";
+    public static final String BASE_PLAN_PRO_2K = "monthly-pro-2k";
+    public static final String SKU_ULTRA_4K = "clutchclip_ultra_4k_120fps_monthly";
+    public static final String BASE_PLAN_ULTRA_4K = "monthly-ultra-4k";
 
     // Firebase Web OAuth Client ID for notes-translator-bfed5
     public static final String WEB_OAUTH_CLIENT_ID = "879646985701-l0u52sneqhv9tpfm2q5cv1akis6l8a0l.apps.googleusercontent.com";
@@ -75,9 +87,12 @@ public class MainActivity extends BridgeActivity {
 
     private AdView bannerAdView;
     private AppOpenAd appOpenAd;
-    private boolean isShowingAppOpenAd = false;
-    private boolean isLoadingAppOpenAd = false;
     private GoogleSignInClient googleSignInClient;
+    private BillingClient billingClient;
+
+    // Pending subscription purchase context
+    private String pendingPurchaseProductId = SKU_PRO_2K;
+    private String pendingPurchaseBasePlanId = BASE_PLAN_PRO_2K;
 
     // Pending screen recording configuration while waiting for Android permission dialog
     private String pendingResolution = "1080p";
@@ -145,9 +160,470 @@ public class MainActivity extends BridgeActivity {
                 .build();
         googleSignInClient = GoogleSignIn.getClient(this, gso);
 
+        // Initialize Google Play Billing Client v8.3.0
+        initializePlayBillingClient();
+
         // Initialize Google Mobile Ads SDK (Ads are displayed inline in empty spaces between sections inside the app UI, never as floating overlays)
         MobileAds.initialize(this, initializationStatus -> {
             // Inline ad slots are rendered inside the app's empty spaces between cards
+        });
+    }
+
+    private void initializePlayBillingClient() {
+        try {
+            billingClient = BillingClient.newBuilder(this)
+                    .setListener(this)
+                    .enablePendingPurchases(
+                            PendingPurchasesParams.newBuilder()
+                                    .enableOneTimeProducts()
+                                    .build()
+                    )
+                    .build();
+            ensureBillingConnected(null, null);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ensureBillingConnected(@Nullable Runnable onConnected, @Nullable Runnable onError) {
+        if (billingClient == null) {
+            initializePlayBillingClient();
+        }
+        if (billingClient == null) {
+            if (onError != null) onError.run();
+            return;
+        }
+        if (billingClient.isReady()) {
+            if (onConnected != null) onConnected.run();
+            return;
+        }
+        billingClient.startConnection(new BillingClientStateListener() {
+            @Override
+            public void onBillingSetupFinished(@NonNull BillingResult billingResult) {
+                if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                    if (onConnected != null) {
+                        onConnected.run();
+                    }
+                } else {
+                    if (onError != null) {
+                        onError.run();
+                    }
+                }
+            }
+
+            @Override
+            public void onBillingServiceDisconnected() {
+                // Will automatically reconnect on next purchase or restore request
+            }
+        });
+    }
+
+    public void launchSubscriptionPurchaseFlow(final String productId, final String basePlanId) {
+        final String targetProductId = (productId != null && !productId.trim().isEmpty())
+                ? productId.trim()
+                : SKU_PRO_2K;
+        final String targetBasePlanId = (basePlanId != null && !basePlanId.trim().isEmpty())
+                ? basePlanId.trim()
+                : (SKU_ULTRA_4K.equals(targetProductId) ? BASE_PLAN_ULTRA_4K : BASE_PLAN_PRO_2K);
+
+        this.pendingPurchaseProductId = targetProductId;
+        this.pendingPurchaseBasePlanId = targetBasePlanId;
+
+        ensureBillingConnected(
+                () -> {
+                    List<QueryProductDetailsParams.Product> productList = new ArrayList<>();
+                    productList.add(
+                            QueryProductDetailsParams.Product.newBuilder()
+                                    .setProductId(targetProductId)
+                                    .setProductType(BillingClient.ProductType.SUBS)
+                                    .build()
+                    );
+
+                    QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
+                            .setProductList(productList)
+                            .build();
+
+                    billingClient.queryProductDetailsAsync(params, new ProductDetailsResponseListener() {
+                        @Override
+                        public void onProductDetailsResponse(
+                                @NonNull BillingResult billingResult,
+                                @NonNull QueryProductDetailsResult productDetailsResult
+                        ) {
+                            if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                                notifyWebViewBillingResult(
+                                        false,
+                                        false,
+                                        targetProductId,
+                                        targetBasePlanId,
+                                        null,
+                                        null,
+                                        0L,
+                                        "Google Play Billing unavailable (" + billingResult.getResponseCode() + "): " + billingResult.getDebugMessage()
+                                );
+                                return;
+                            }
+
+                            List<ProductDetails> detailsList = productDetailsResult.getProductDetailsList();
+                            if (detailsList == null || detailsList.isEmpty()) {
+                                notifyWebViewBillingResult(
+                                        false,
+                                        false,
+                                        targetProductId,
+                                        targetBasePlanId,
+                                        null,
+                                        null,
+                                        0L,
+                                        "Subscription product (" + targetProductId + ") not found on Google Play. Ensure the app is installed via Google Play testing track."
+                                );
+                                return;
+                            }
+
+                            ProductDetails matchedProduct = detailsList.get(0);
+                            for (ProductDetails pd : detailsList) {
+                                if (targetProductId.equals(pd.getProductId())) {
+                                    matchedProduct = pd;
+                                    break;
+                                }
+                            }
+
+                            List<ProductDetails.SubscriptionOfferDetails> offers =
+                                    matchedProduct.getSubscriptionOfferDetails();
+                            if (offers == null || offers.isEmpty()) {
+                                notifyWebViewBillingResult(
+                                        false,
+                                        false,
+                                        targetProductId,
+                                        targetBasePlanId,
+                                        null,
+                                        null,
+                                        0L,
+                                        "No active base plan (" + targetBasePlanId + ") found for " + targetProductId
+                                );
+                                return;
+                            }
+
+                            // Match the exact basePlanId configured in Play Console (monthly-pro-2k or monthly-ultra-4k)
+                            ProductDetails.SubscriptionOfferDetails selectedOffer = offers.get(0);
+                            for (ProductDetails.SubscriptionOfferDetails offer : offers) {
+                                if (targetBasePlanId.equalsIgnoreCase(offer.getBasePlanId())) {
+                                    selectedOffer = offer;
+                                    break;
+                                }
+                            }
+
+                            final ProductDetails finalProduct = matchedProduct;
+                            final String offerToken = selectedOffer.getOfferToken();
+
+                            runOnUiThread(() -> {
+                                BillingFlowParams.ProductDetailsParams productDetailsParams =
+                                        BillingFlowParams.ProductDetailsParams.newBuilder()
+                                                .setProductDetails(finalProduct)
+                                                .setOfferToken(offerToken)
+                                                .build();
+
+                                BillingFlowParams flowParams = BillingFlowParams.newBuilder()
+                                        .setProductDetailsParamsList(Collections.singletonList(productDetailsParams))
+                                        .build();
+
+                                BillingResult launchResult = billingClient.launchBillingFlow(MainActivity.this, flowParams);
+                                if (launchResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                                    notifyWebViewBillingResult(
+                                            false,
+                                            false,
+                                            targetProductId,
+                                            targetBasePlanId,
+                                            null,
+                                            null,
+                                            0L,
+                                            "Failed to open Google Play purchase dialog (" + launchResult.getResponseCode() + ")"
+                                    );
+                                }
+                            });
+                        }
+                    });
+                },
+                () -> notifyWebViewBillingResult(
+                        false,
+                        false,
+                        targetProductId,
+                        targetBasePlanId,
+                        null,
+                        null,
+                        0L,
+                        "Could not connect to Google Play Store service on this device."
+                )
+        );
+    }
+
+    @Override
+    public void onPurchasesUpdated(@NonNull BillingResult billingResult, @Nullable List<Purchase> purchases) {
+        int code = billingResult.getResponseCode();
+        if (code == BillingClient.BillingResponseCode.OK && purchases != null && !purchases.isEmpty()) {
+            for (Purchase purchase : purchases) {
+                handleVerifiedPurchase(purchase, true);
+            }
+        } else if (code == BillingClient.BillingResponseCode.USER_CANCELED) {
+            notifyWebViewBillingResult(
+                    false,
+                    true,
+                    pendingPurchaseProductId,
+                    pendingPurchaseBasePlanId,
+                    null,
+                    null,
+                    0L,
+                    "Purchase cancelled."
+            );
+        } else if (code == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            // User already owns this subscription on Google Play — automatically restore it
+            queryAndRestoreActiveSubscriptions(true);
+        } else {
+            notifyWebViewBillingResult(
+                    false,
+                    false,
+                    pendingPurchaseProductId,
+                    pendingPurchaseBasePlanId,
+                    null,
+                    null,
+                    0L,
+                    "Google Play Billing error (" + code + "): " + billingResult.getDebugMessage()
+            );
+        }
+    }
+
+    private void handleVerifiedPurchase(@NonNull Purchase purchase, final boolean isDirectPurchase) {
+        if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+            List<String> products = purchase.getProducts();
+            final String productId = (products != null && !products.isEmpty())
+                    ? products.get(0)
+                    : pendingPurchaseProductId;
+            final String basePlanId = SKU_ULTRA_4K.equals(productId)
+                    ? BASE_PLAN_ULTRA_4K
+                    : BASE_PLAN_PRO_2K;
+            final String orderId = purchase.getOrderId() != null ? purchase.getOrderId() : "";
+            final String purchaseToken = purchase.getPurchaseToken();
+            final long purchaseTime = purchase.getPurchaseTime();
+
+            updatePremiumAdFreeStatus(true);
+
+            // Acknowledge subscription immediately (mandatory in Google Play Billing so it does not auto-refund after 3 days)
+            if (!purchase.isAcknowledged() && billingClient != null) {
+                AcknowledgePurchaseParams ackParams = AcknowledgePurchaseParams.newBuilder()
+                        .setPurchaseToken(purchaseToken)
+                        .build();
+                billingClient.acknowledgePurchase(ackParams, ackResult -> {
+                    if (isDirectPurchase) {
+                        notifyWebViewBillingResult(
+                                true,
+                                false,
+                                productId,
+                                basePlanId,
+                                orderId,
+                                purchaseToken,
+                                purchaseTime,
+                                null
+                        );
+                    } else {
+                        notifyWebViewRestoreResult(true, productId, basePlanId, orderId, purchaseToken, purchaseTime);
+                    }
+                });
+            } else {
+                if (isDirectPurchase) {
+                    notifyWebViewBillingResult(
+                            true,
+                            false,
+                            productId,
+                            basePlanId,
+                            orderId,
+                            purchaseToken,
+                            purchaseTime,
+                            null
+                    );
+                } else {
+                    notifyWebViewRestoreResult(true, productId, basePlanId, orderId, purchaseToken, purchaseTime);
+                }
+            }
+        } else if (purchase.getPurchaseState() == Purchase.PurchaseState.PENDING) {
+            if (isDirectPurchase) {
+                notifyWebViewBillingResult(
+                        false,
+                        false,
+                        pendingPurchaseProductId,
+                        pendingPurchaseBasePlanId,
+                        null,
+                        null,
+                        0L,
+                        "Your payment is pending confirmation in Google Play."
+                );
+            }
+        }
+    }
+
+    public void queryAndRestoreActiveSubscriptions(final boolean notifyAsDirectPurchase) {
+        ensureBillingConnected(
+                () -> {
+                    QueryPurchasesParams params = QueryPurchasesParams.newBuilder()
+                            .setProductType(BillingClient.ProductType.SUBS)
+                            .build();
+                    billingClient.queryPurchasesAsync(params, (billingResult, purchasesList) -> {
+                        if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK
+                                || purchasesList == null
+                                || purchasesList.isEmpty()) {
+                            if (notifyAsDirectPurchase) {
+                                notifyWebViewBillingResult(
+                                        false,
+                                        false,
+                                        pendingPurchaseProductId,
+                                        pendingPurchaseBasePlanId,
+                                        null,
+                                        null,
+                                        0L,
+                                        "No active Google Play subscription found."
+                                );
+                            } else {
+                                notifyWebViewRestoreResult(false, "", "", "", "", 0L);
+                            }
+                            return;
+                        }
+
+                        Purchase bestPurchase = null;
+                        for (Purchase p : purchasesList) {
+                            if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+                                if (bestPurchase == null) {
+                                    bestPurchase = p;
+                                } else if (p.getProducts().contains(SKU_ULTRA_4K)) {
+                                    bestPurchase = p;
+                                }
+                            }
+                        }
+
+                        if (bestPurchase != null) {
+                            handleVerifiedPurchase(bestPurchase, notifyAsDirectPurchase);
+                        } else {
+                            if (notifyAsDirectPurchase) {
+                                notifyWebViewBillingResult(
+                                        false,
+                                        false,
+                                        pendingPurchaseProductId,
+                                        pendingPurchaseBasePlanId,
+                                        null,
+                                        null,
+                                        0L,
+                                        "No active Google Play subscription found."
+                                );
+                            } else {
+                                notifyWebViewRestoreResult(false, "", "", "", "", 0L);
+                            }
+                        }
+                    });
+                },
+                () -> {
+                    if (notifyAsDirectPurchase) {
+                        notifyWebViewBillingResult(
+                                false,
+                                false,
+                                pendingPurchaseProductId,
+                                pendingPurchaseBasePlanId,
+                                null,
+                                null,
+                                0L,
+                                "Could not connect to Google Play Store."
+                        );
+                    } else {
+                        notifyWebViewRestoreResult(false, "", "", "", "", 0L);
+                    }
+                }
+        );
+    }
+
+    private void notifyWebViewBillingResult(
+            boolean success,
+            boolean cancelled,
+            @Nullable String productId,
+            @Nullable String basePlanId,
+            @Nullable String orderId,
+            @Nullable String purchaseToken,
+            long purchaseTime,
+            @Nullable String errorMessage
+    ) {
+        runOnUiThread(() -> {
+            try {
+                JSONObject json = new JSONObject();
+                json.put("success", success);
+                json.put("cancelled", cancelled);
+                json.put("productId", productId != null ? productId : "");
+                json.put("basePlanId", basePlanId != null ? basePlanId : "");
+                json.put("orderId", orderId != null ? orderId : "");
+                json.put("purchaseToken", purchaseToken != null ? purchaseToken : "");
+                json.put("purchaseTime", purchaseTime > 0 ? purchaseTime : System.currentTimeMillis());
+                json.put("error", errorMessage != null ? errorMessage : "");
+
+                String escaped = json.toString()
+                        .replace("\\", "\\\\")
+                        .replace("'", "\\'")
+                        .replace("\n", "")
+                        .replace("\r", "");
+
+                WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                            "if (window.onNativePlayBillingResult) { window.onNativePlayBillingResult('" + escaped + "'); }",
+                            null
+                    );
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    private void notifyWebViewRestoreResult(
+            boolean found,
+            @Nullable String productId,
+            @Nullable String basePlanId,
+            @Nullable String orderId,
+            @Nullable String purchaseToken,
+            long purchaseTime
+    ) {
+        runOnUiThread(() -> {
+            try {
+                JSONObject json = new JSONObject();
+                json.put("found", found);
+                json.put("productId", productId != null ? productId : "");
+                json.put("basePlanId", basePlanId != null ? basePlanId : "");
+                json.put("orderId", orderId != null ? orderId : "");
+                json.put("purchaseToken", purchaseToken != null ? purchaseToken : "");
+                json.put("purchaseTime", purchaseTime > 0 ? purchaseTime : System.currentTimeMillis());
+
+                String escaped = json.toString()
+                        .replace("\\", "\\\\")
+                        .replace("'", "\\'")
+                        .replace("\n", "")
+                        .replace("\r", "");
+
+                WebView webView = getBridge() != null ? getBridge().getWebView() : null;
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                            "if (window.onNativePlayRestoreResult) { window.onNativePlayRestoreResult('" + escaped + "'); }",
+                            null
+                    );
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    public void openPlaySubscriptionsCenter(@Nullable String productId) {
+        runOnUiThread(() -> {
+            try {
+                String url = "https://play.google.com/store/account/subscriptions?package=" + getPackageName();
+                if (productId != null && !productId.trim().isEmpty()) {
+                    url = "https://play.google.com/store/account/subscriptions?sku="
+                            + Uri.encode(productId.trim())
+                            + "&package=" + getPackageName();
+                }
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Exception ignored) {
+            }
         });
     }
 
@@ -160,6 +636,12 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (billingClient != null && billingClient.isReady()) {
+            try {
+                billingClient.endConnection();
+            } catch (Exception ignored) {
+            }
+        }
         if (currentInstance == this) {
             currentInstance = null;
         }
@@ -459,10 +941,6 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    private void setupBannerAdForFreeUser() {
-        // Floating overlay banner disabled: ads are placed inline in empty spaces between sections in the UI
-    }
-
     @Override
     public void onRestart() {
         super.onRestart();
@@ -489,6 +967,21 @@ public class MainActivity extends BridgeActivity {
             if (activity.googleSignInClient != null) {
                 activity.googleSignInClient.signOut();
             }
+        }
+
+        @JavascriptInterface
+        public void purchaseSubscription(String productId, String basePlanId) {
+            activity.launchSubscriptionPurchaseFlow(productId, basePlanId);
+        }
+
+        @JavascriptInterface
+        public void restorePlayPurchases() {
+            activity.queryAndRestoreActiveSubscriptions(false);
+        }
+
+        @JavascriptInterface
+        public void openPlayStoreSubscriptions(String productId) {
+            activity.openPlaySubscriptionsCenter(productId);
         }
 
         @JavascriptInterface

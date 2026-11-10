@@ -79,7 +79,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           Created by <span className="text-white font-semibold">Aditya</span>
         </div>
         <div className="text-[11px] font-mono-numbers text-slate-500">
-          v1.00.02 &bull; 4K 120 FPS Studio
+          v1.00.03 &bull; 4K 120 FPS Studio
         </div>
       </div>
     </div>
